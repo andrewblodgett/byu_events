@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BYU Events</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <header>
+        <h1>BYU Events</h1>
+        <div class="controls">
+            <input type="text" id="search-input" placeholder="Search events..." aria-label="Search events by title, description, or location">
+            <label>
+                <input type="checkbox" id="free-filter" aria-label="Filter to show only free events"> <span>Free Only</span>
+            </label>
+            <select id="sort-select" aria-label="Sort events by">
+                <option value="date-asc">Date (Earliest First)</option>
+                <option value="date-desc">Date (Latest First)</option>
+                <option value="location-asc">Location (A-Z)</option>
+            </select>
+            <select id="group-select" aria-label="Group events by">
+                <option value="none">No Grouping</option>
+                <option value="type">Group by Type</option>
+                <option value="date">Group by Date</option>
+            </select>
+            <select id="view-select" aria-label="Toggle View Mode">
+                <option value="grid">Grid View</option>
+                <option value="list">List View</option>
+            </select>
+        </div>
+    </header>
+    <main id="app">
+        <div id="loading" class="loading-indicator">Loading upcoming BYU events...</div>
+        <!-- Events will be rendered here dynamically -->
+    </main>
+    <footer>
+        <p>&copy; 2026 BYU Events Aggregator</p>
+    </footer>
+</body>
+</html>
