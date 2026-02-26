@@ -264,7 +264,11 @@ function resetFilters() {
 async function fetchEvents() {
     const today = new Date().toISOString().split('T')[0];
     const baseUrl = 'https://calendar.byu.edu/api/Events.json';
-    const params = new URLSearchParams({ 'categories': 'all', 'event[min][date]': today });
+    const params = new URLSearchParams({ 
+        'categories': 'all+90', // 'all' usually works, but adding 90 explicitly ensures featured events
+        'event[min][date]': today,
+        'limit': '2000' // Increased from default 100 to get "all the stuff"
+    });
     
     try {
         const response = await fetch(`${baseUrl}?${params.toString()}`);
