@@ -281,40 +281,58 @@ async function fetchEvents() {
     isFetching = true;
     
     allEvents = [];
-    currentOffset = 0;
     const app = document.getElementById('app');
-    if (app) app.innerHTML = '<div class="loading-indicator">Loading all events...</div>';
+    if (app) app.innerHTML = '<div class="loading-indicator">Loading BYU events...</div>';
 
     const today = new Date().toISOString().split('T')[0];
-    const baseUrls = [
-        'https://calendar.byu.edu/api/Events.json',
-        'https://academiccalendar.byu.edu/api/Events.json'
-    ];
+    
+    // Main API (Supports CORS)
+    const mainUrl = 'https://calendar.byu.edu/api/Events.json';
+    // Academic API (Currently fails CORS in browser, but we'll try just in case or for future-proofing)
+    const academicUrl = 'https://academiccalendar.byu.edu/api/Events.json';
 
-    try {
-        // Fetch from multiple sources in parallel
-        const fetchPromises = baseUrls.map(async (baseUrl) => {
+    const fetchSource = async (url) => {
+        try {
             const params = new URLSearchParams({ 
                 'categories': 'all',
                 'event[min][date]': today,
                 'limit': '1000'
             });
-            const response = await fetch(`${baseUrl}?${params.toString()}`);
+            const response = await fetch(`${url}?${params.toString()}`);
             if (!response.ok) return [];
             const data = await response.json();
             return normalizeData(data);
-        });
+        } catch (e) {
+            console.warn(`Source failed: ${url}`, e);
+            return [];
+        }
+    };
 
-        const results = await Promise.all(fetchPromises);
+    try {
+        // Fetch both, but they are independent
+        const [mainEvents, academicEvents] = await Promise.all([
+            fetchSource(mainUrl),
+            fetchSource(academicUrl)
+        ]);
+        
+        const merged = [...mainEvents, ...academicEvents];
         
         // Merge and remove duplicates
         const idSet = new Set();
-        results.flat().forEach(e => {
+        merged.forEach(e => {
             if (!idSet.has(e.id)) {
                 allEvents.push(e);
                 idSet.add(e.id);
             }
         });
+
+        if (allEvents.length === 0) {
+            if (app) app.innerHTML = `<div class="error-container">
+                <p class="error-message">No events found. The API might be temporarily unavailable.</p>
+                <button onclick="fetchEvents()" class="retry-btn">Retry</button>
+            </div>`;
+            return;
+        }
 
         populateFilters();
         const savedCats = getCookie('pref-categories');
@@ -323,7 +341,10 @@ async function fetchEvents() {
         updateUI();
     } catch (error) {
         console.error('Fetch error:', error);
-        if (app) app.innerHTML = `<p class="error-message">Failed to load events. Please check your connection.</p>`;
+        if (app) app.innerHTML = `<div class="error-container">
+            <p class="error-message">Failed to load events. Please check your connection.</p>
+            <button onclick="fetchEvents()" class="retry-btn">Retry</button>
+        </div>`;
     } finally {
         isFetching = false;
     }
