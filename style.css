@@ -218,13 +218,64 @@ h1 {
 .event-card {
     background-color: var(--bg-secondary);
     border-radius: 8px;
-    padding: 1.5rem;
+    padding: 0; /* Changed from 1.5rem to accommodate image */
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     transition: transform 0.2s, max-height 0.3s ease-out;
     position: relative;
-    max-height: 250px;
+    max-height: 350px; /* Increased from 250px */
     overflow: hidden;
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
+}
+
+.card-content {
+    padding: 1.5rem;
+}
+
+.event-image-container {
+    width: 100%;
+    height: 150px;
+    overflow: hidden;
+}
+
+.event-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s;
+}
+
+.event-card:hover .event-image {
+    transform: scale(1.05);
+}
+
+.event-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.calendar-links {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.calendar-links a {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border: 1px solid var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.calendar-links a:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background-color: rgba(56, 189, 248, 0.1);
 }
 
 .free-tag {
@@ -243,9 +294,28 @@ h1 {
 .view-list .event-card {
     max-height: none;
     display: flex;
-    justify-content: space-between;
+    flex-direction: row; /* Horizontal in list view */
     align-items: center;
-    padding: 1rem;
+    padding: 0;
+}
+
+.view-list .event-image-container {
+    width: 200px;
+    height: 120px;
+    flex-shrink: 0;
+}
+
+.view-list .card-content {
+    flex-grow: 1;
+    padding: 1rem 1.5rem;
+}
+
+.view-list .event-description {
+    -webkit-line-clamp: 2;
+}
+
+.view-list .event-actions {
+    margin-top: 0.5rem;
 }
 
 .event-card.expanded {

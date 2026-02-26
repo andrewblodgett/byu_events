@@ -21,16 +21,20 @@ function getCookie(name) {
 function normalizeData(rawData) {
     if (!Array.isArray(rawData)) return [];
     return rawData.map(event => {
-        const date = event.StartDateTime ? new Date(event.StartDateTime.replace(' ', 'T')) : null;
+        const startDate = event.StartDateTime ? new Date(event.StartDateTime.replace(' ', 'T')) : null;
+        const endDate = event.EndDateTime ? new Date(event.EndDateTime.replace(' ', 'T')) : null;
         return {
             title: event.Title || 'Untitled Event',
-            date: date,
+            date: startDate,
+            endDate: endDate,
             location: event.LocationName || event.field_event_location || 'TBD',
             description: event.Description || event.ShortDescription || 'No description available.',
             isFree: event.IsFree === "true" || event.IsFree === true || event.LowPrice === "0.0",
             price: event.PriceDescription || (event.LowPrice === "0.0" ? "Free" : event.LowPrice) || 'Free',
             url: event.FullUrl || '#',
-            type: event.CategoryName || 'Other'
+            type: event.CategoryName || 'Other',
+            imgUrl: event.ImgUrl || null,
+            imgAlt: event.ImgAlt || ''
         };
     }).filter(event => event.date !== null);
 }
@@ -172,6 +176,36 @@ function groupEvents(events, criteria) {
     }, {});
 }
 
+function formatCalendarDate(date) {
+    if (!date) return '';
+    return date.toISOString().replace(/-|:|\.\d+/g, '');
+}
+
+function getGoogleCalendarLink(event) {
+    const base = 'https://www.google.com/calendar/render?action=TEMPLATE';
+    const start = formatCalendarDate(event.date);
+    const end = formatCalendarDate(event.endDate || new Date(event.date.getTime() + 3600000));
+    return `${base}&text=${encodeURIComponent(event.title)}&dates=${start}/${end}&details=${encodeURIComponent(event.description)}&location=${encodeURIComponent(event.location)}`;
+}
+
+function getICalLink(event) {
+    const start = formatCalendarDate(event.date);
+    const end = formatCalendarDate(event.endDate || new Date(event.date.getTime() + 3600000));
+    const icalData = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        `DTSTART:${start}`,
+        `DTEND:${end}`,
+        `SUMMARY:${event.title}`,
+        `DESCRIPTION:${event.description.replace(/\n/g, '\\n')}`,
+        `LOCATION:${event.location}`,
+        'END:VEVENT',
+        'END:VCALENDAR'
+    ].join('\n');
+    return `data:text/calendar;charset=utf8,${encodeURIComponent(icalData)}`;
+}
+
 function createEventCard(event, viewMode) {
     const card = document.createElement('article');
     card.className = 'event-card';
@@ -182,6 +216,7 @@ function createEventCard(event, viewMode) {
 
     card.innerHTML = `
         ${event.isFree ? '<div class="free-tag">FREE</div>' : ''}
+        ${event.imgUrl ? `<div class="event-image-container"><img src="${event.imgUrl}" alt="${event.imgAlt}" class="event-image"></div>` : ''}
         <div class="card-content">
             <h2 class="event-title">${event.title}</h2>
             <p class="event-date">${dateString}</p>
@@ -189,7 +224,13 @@ function createEventCard(event, viewMode) {
             <div class="event-details">
                 <div class="event-description">${event.description}</div>
                 <p class="event-price">${event.isFree ? 'Free' : event.price}</p>
-                <a href="${event.url}" target="_blank" class="event-link" onclick="event.stopPropagation()">View Details</a>
+                <div class="event-actions">
+                    <a href="${event.url}" target="_blank" class="event-link" onclick="event.stopPropagation()">View Details</a>
+                    <div class="calendar-links" onclick="event.stopPropagation()">
+                        <a href="${getGoogleCalendarLink(event)}" target="_blank" title="Add to Google Calendar">GCal</a>
+                        <a href="${getICalLink(event)}" download="${event.title}.ics" title="Download iCal">iCal</a>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="expand-hint">Click to expand</div>
@@ -202,45 +243,49 @@ function createEventCard(event, viewMode) {
     return card;
 }
 
+let updateTimeout;
 function updateUI() {
-    const searchTerm = document.getElementById('search-input').value.toLowerCase();
-    const freeOnly = document.getElementById('free-filter').checked;
-    const sortValue = document.getElementById('sort-select').value;
-    const groupValue = document.getElementById('group-select').value;
-    const viewValue = document.getElementById('view-select').value;
-    const dateStart = document.getElementById('date-start').value;
-    const dateEnd = document.getElementById('date-end').value;
+    clearTimeout(updateTimeout);
+    updateTimeout = setTimeout(() => {
+        const searchTerm = document.getElementById('search-input').value.toLowerCase();
+        const freeOnly = document.getElementById('free-filter').checked;
+        const sortValue = document.getElementById('sort-select').value;
+        const groupValue = document.getElementById('group-select').value;
+        const viewValue = document.getElementById('view-select').value;
+        const dateStart = document.getElementById('date-start').value;
+        const dateEnd = document.getElementById('date-end').value;
 
-    // Save preferences
-    setCookie('pref-search', searchTerm);
-    setCookie('pref-free', freeOnly);
-    setCookie('pref-sort', sortValue);
-    setCookie('pref-group', groupValue);
-    setCookie('pref-view', viewValue);
-    setCookie('pref-categories', Array.from(selectedCategories).join(','));
+        // Save preferences
+        setCookie('pref-search', searchTerm);
+        setCookie('pref-free', freeOnly);
+        setCookie('pref-sort', sortValue);
+        setCookie('pref-group', groupValue);
+        setCookie('pref-view', viewValue);
+        setCookie('pref-categories', Array.from(selectedCategories).join(','));
 
-    let filtered = allEvents.filter(event => {
-        const matchesSearch = event.title.toLowerCase().includes(searchTerm) || 
-                              event.description.toLowerCase().includes(searchTerm) ||
-                              event.location.toLowerCase().includes(searchTerm);
-        const matchesFree = !freeOnly || event.isFree;
-        const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(event.type);
-        
-        const eventTime = event.date.getTime();
-        const matchesDateStart = !dateStart || eventTime >= new Date(dateStart).getTime();
-        const matchesDateEnd = !dateEnd || eventTime <= (new Date(dateEnd).getTime() + 86400000);
+        let filtered = allEvents.filter(event => {
+            const matchesSearch = event.title.toLowerCase().includes(searchTerm) || 
+                                  event.description.toLowerCase().includes(searchTerm) ||
+                                  event.location.toLowerCase().includes(searchTerm);
+            const matchesFree = !freeOnly || event.isFree;
+            const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(event.type);
+            
+            const eventTime = event.date.getTime();
+            const matchesDateStart = !dateStart || eventTime >= new Date(dateStart).getTime();
+            const matchesDateEnd = !dateEnd || eventTime <= (new Date(dateEnd).getTime() + 86400000);
 
-        return matchesSearch && matchesFree && matchesCategory && matchesDateStart && matchesDateEnd;
-    });
+            return matchesSearch && matchesFree && matchesCategory && matchesDateStart && matchesDateEnd;
+        });
 
-    filtered.sort((a, b) => {
-        if (sortValue === 'date-asc') return a.date - b.date;
-        if (sortValue === 'date-desc') return b.date - a.date;
-        if (sortValue === 'location-asc') return a.location.localeCompare(b.location);
-        return 0;
-    });
+        filtered.sort((a, b) => {
+            if (sortValue === 'date-asc') return a.date - b.date;
+            if (sortValue === 'date-desc') return b.date - a.date;
+            if (sortValue === 'location-asc') return a.location.localeCompare(b.location);
+            return 0;
+        });
 
-    renderEvents(filtered);
+        renderEvents(filtered);
+    }, 200); // Debounce
 }
 
 function loadPreferences() {
@@ -271,7 +316,8 @@ async function fetchEvents() {
         updateUI();
     } catch (error) {
         console.error(error);
-        document.getElementById('app').innerHTML = `<p class="error-message">Failed to load events.</p>`;
+        const app = document.getElementById('app');
+        if (app) app.innerHTML = `<p class="error-message">Failed to load events.</p>`;
     }
 }
 
