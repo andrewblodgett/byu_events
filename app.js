@@ -142,6 +142,8 @@ function renderCalendarView(events, container) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    // Header row
     for (let i = 0; i < 7; i++) {
         const currentDay = new Date(today);
         currentDay.setDate(today.getDate() + i);
@@ -150,22 +152,31 @@ function renderCalendarView(events, container) {
         header.innerHTML = `<div>${weekdays[currentDay.getDay()]}</div><div style="font-size: 0.7rem; opacity: 0.7">${currentDay.getMonth() + 1}/${currentDay.getDate()}</div>`;
         container.appendChild(header);
     }
+    
+    // Day cells
     for (let i = 0; i < 7; i++) {
         const currentDay = new Date(today);
         currentDay.setDate(today.getDate() + i);
         const dayDiv = document.createElement('div');
         dayDiv.className = 'calendar-day';
+        
         const dayEvents = events.filter(e => {
             const eDate = new Date(e.date);
-            eDate.setHours(0,0,0,0);
-            return eDate.getTime() === currentDay.getTime();
-        });
+            return eDate.getFullYear() === currentDay.getFullYear() &&
+                   eDate.getMonth() === currentDay.getMonth() &&
+                   eDate.getDate() === currentDay.getDate();
+        }).sort((a, b) => a.date - b.date);
+
         dayEvents.forEach(e => {
             const evDiv = document.createElement('div');
             evDiv.className = 'calendar-event';
             const timeStr = e.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
-            evDiv.textContent = `${e.title}\n${timeStr} ${e.location}`;
-            evDiv.onclick = () => window.open(e.url, '_blank');
+            evDiv.title = `${timeStr} - ${e.title} @ ${e.location}`;
+            evDiv.textContent = `${timeStr} ${e.title}`;
+            evDiv.onclick = (event) => {
+                event.stopPropagation();
+                window.open(e.url, '_blank');
+            };
             dayDiv.appendChild(evDiv);
         });
         container.appendChild(dayDiv);
@@ -282,42 +293,57 @@ async function fetchEvents() {
     
     allEvents = [];
     const app = document.getElementById('app');
-    if (app) app.innerHTML = '<div class="loading-indicator">Loading BYU events...</div>';
+    if (app) app.innerHTML = '<div class="loading-indicator">Syncing all BYU events...</div>';
 
     const today = new Date().toISOString().split('T')[0];
-    
-    // Main API (Supports CORS)
     const mainUrl = 'https://calendar.byu.edu/api/Events.json';
-    // Academic API (Currently fails CORS in browser, but we'll try just in case or for future-proofing)
     const academicUrl = 'https://academiccalendar.byu.edu/api/Events.json';
 
-    const fetchSource = async (url) => {
-        try {
-            const params = new URLSearchParams({ 
-                'categories': 'all',
-                'event[min][date]': today,
-                'limit': '1000'
-            });
-            const response = await fetch(`${url}?${params.toString()}`);
-            if (!response.ok) return [];
-            const data = await response.json();
-            return normalizeData(data);
-        } catch (e) {
-            console.warn(`Source failed: ${url}`, e);
-            return [];
+    const fetchAllFromSource = async (url) => {
+        let sourceEvents = [];
+        let offset = 0;
+        const limit = 500;
+        let hasMore = true;
+
+        while (hasMore && offset < 2000) { // Limit to 2000 to prevent infinite loops, but enough for most cases
+            try {
+                const params = new URLSearchParams({ 
+                    'categories': 'all',
+                    'event[min][date]': today,
+                    'limit': limit.toString(),
+                    'offset': offset.toString()
+                });
+                const response = await fetch(`${url}?${params.toString()}`);
+                if (!response.ok) break;
+                const data = await response.json();
+                const normalized = normalizeData(data);
+                
+                if (normalized.length === 0) {
+                    hasMore = false;
+                } else {
+                    sourceEvents = sourceEvents.concat(normalized);
+                    offset += limit;
+                    // If we got fewer events than the limit, we've reached the end
+                    if (normalized.length < limit / 2 && data.length < limit) hasMore = false; 
+                }
+            } catch (e) {
+                console.warn(`Source failed at offset ${offset}: ${url}`, e);
+                hasMore = false;
+            }
         }
+        return sourceEvents;
     };
 
     try {
         // Fetch both, but they are independent
         const [mainEvents, academicEvents] = await Promise.all([
-            fetchSource(mainUrl),
-            fetchSource(academicUrl)
+            fetchAllFromSource(mainUrl),
+            fetchAllFromSource(academicUrl)
         ]);
         
         const merged = [...mainEvents, ...academicEvents];
         
-        // Merge and remove duplicates
+        // Merge and remove duplicates by ID
         const idSet = new Set();
         merged.forEach(e => {
             if (!idSet.has(e.id)) {
