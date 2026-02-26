@@ -383,6 +383,23 @@ header {
     padding-bottom: 0.5rem;
 }
 
+.load-more-btn {
+    grid-column: 1 / -1;
+    margin: 2rem auto;
+    width: fit-content;
+    padding: 1rem 2.5rem;
+    font-size: 1rem;
+    background-color: var(--accent);
+    color: var(--bg-primary);
+    border: none;
+    font-weight: bold;
+}
+
+.load-more-btn:hover {
+    background-color: white;
+    color: var(--bg-primary);
+}
+
 .empty-state, .loading-indicator, .error-message {
     grid-column: 1 / -1;
     text-align: center;

@@ -1,5 +1,8 @@
 let allEvents = [];
 let selectedCategories = new Set();
+let selectedDepts = new Set();
+let currentOffset = 0;
+const BATCH_SIZE = 500;
 
 // Cookie Helpers
 function setCookie(name, value, days = 30) {
@@ -23,45 +26,61 @@ function normalizeData(rawData) {
     return rawData.map(event => {
         const startDate = event.StartDateTime ? new Date(event.StartDateTime.replace(' ', 'T')) : null;
         const endDate = event.EndDateTime ? new Date(event.EndDateTime.replace(' ', 'T')) : null;
-        
-        // Extract tags as an array
         const tags = event.TagsNames ? event.TagsNames.split(',').map(t => t.trim()).filter(t => t) : [];
+        const depts = event.DeptNames ? event.DeptNames.split(',').map(d => d.trim()).filter(d => d) : [];
 
         return {
+            id: event.OccurrenceId || event.EventId,
             title: event.Title || 'Untitled Event',
             date: startDate,
             endDate: endDate,
             location: event.LocationName || event.field_event_location || 'TBD',
-            description: (event.Description || event.ShortDescription || 'No description available.').replace(/<[^>]*>?/gm, ''), // Clean HTML
+            description: (event.Description || event.ShortDescription || 'No description available.').replace(/<[^>]*>?/gm, ''),
             isFree: event.IsFree === "true" || event.IsFree === true || event.LowPrice === "0.0",
             price: event.PriceDescription || (event.LowPrice === "0.0" ? "Free" : event.LowPrice) || 'Free',
             url: event.FullUrl || '#',
             type: event.CategoryName || 'Other',
             imgUrl: event.ImgUrl || null,
             imgAlt: event.ImgAlt || '',
-            tags: tags
+            tags: tags,
+            depts: depts
         };
     }).filter(event => event.date !== null);
 }
 
-function populateCategories() {
+function populateFilters() {
     const categories = [...new Set(allEvents.map(e => e.type))].sort();
-    const container = document.getElementById('category-filters');
-    if (!container) return;
+    const depts = [...new Set(allEvents.flatMap(e => e.depts))].sort();
     
-    container.innerHTML = '';
-    categories.forEach(cat => {
-        const chip = document.createElement('span');
-        chip.className = `category-chip ${selectedCategories.has(cat) ? 'active' : ''}`;
-        chip.textContent = cat;
-        chip.onclick = () => {
-            if (selectedCategories.has(cat)) selectedCategories.delete(cat);
-            else selectedCategories.add(cat);
-            chip.classList.toggle('active');
-            updateUI();
-        };
-        container.appendChild(chip);
-    });
+    const catContainer = document.getElementById('category-filters');
+    if (catContainer) {
+        catContainer.innerHTML = '';
+        categories.forEach(cat => {
+            const chip = document.createElement('span');
+            chip.className = `category-chip ${selectedCategories.has(cat) ? 'active' : ''}`;
+            chip.textContent = cat;
+            chip.onclick = () => {
+                if (selectedCategories.has(cat)) selectedCategories.delete(cat);
+                else selectedCategories.add(cat);
+                chip.classList.toggle('active');
+                updateUI();
+            };
+            catContainer.appendChild(chip);
+        });
+    }
+
+    const deptSelect = document.getElementById('dept-select');
+    if (deptSelect) {
+        const currentVal = deptSelect.value;
+        deptSelect.innerHTML = '<option value="all">All Departments</option>';
+        depts.forEach(dept => {
+            const opt = document.createElement('option');
+            opt.value = dept;
+            opt.textContent = dept;
+            deptSelect.appendChild(opt);
+        });
+        deptSelect.value = currentVal;
+    }
 }
 
 function renderEvents(eventsArray) {
@@ -95,20 +114,22 @@ function renderEvents(eventsArray) {
             groupItems.forEach(event => appContainer.appendChild(createEventCard(event, viewMode)));
         }
     }
+    
+    // Add "Load More" button if needed
+    if (viewMode !== 'calendar' && viewMode !== 'table') {
+        const loadMoreBtn = document.createElement('button');
+        loadMoreBtn.className = 'icon-btn load-more-btn';
+        loadMoreBtn.textContent = 'Load More Events';
+        loadMoreBtn.onclick = () => fetchEvents(true);
+        appContainer.appendChild(loadMoreBtn);
+    }
 }
 
 function renderTableView(events, container) {
     const table = document.createElement('table');
     table.className = 'events-table';
     table.innerHTML = `
-        <thead>
-            <tr>
-                <th>Date/Time</th>
-                <th>Event</th>
-                <th>Location</th>
-                <th>Price</th>
-            </tr>
-        </thead>
+        <thead><tr><th>Date/Time</th><th>Event</th><th>Location</th><th>Price</th></tr></thead>
         <tbody>
             ${events.map(event => `
                 <tr onclick="window.open('${event.url}', '_blank')">
@@ -127,7 +148,6 @@ function renderCalendarView(events, container) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    
     for (let i = 0; i < 7; i++) {
         const currentDay = new Date(today);
         currentDay.setDate(today.getDate() + i);
@@ -136,19 +156,16 @@ function renderCalendarView(events, container) {
         header.innerHTML = `<div>${weekdays[currentDay.getDay()]}</div><div style="font-size: 0.7rem; opacity: 0.7">${currentDay.getMonth() + 1}/${currentDay.getDate()}</div>`;
         container.appendChild(header);
     }
-
     for (let i = 0; i < 7; i++) {
         const currentDay = new Date(today);
         currentDay.setDate(today.getDate() + i);
         const dayDiv = document.createElement('div');
         dayDiv.className = 'calendar-day';
-        
         const dayEvents = events.filter(e => {
             const eDate = new Date(e.date);
             eDate.setHours(0,0,0,0);
             return eDate.getTime() === currentDay.getTime();
         });
-        
         dayEvents.forEach(e => {
             const evDiv = document.createElement('div');
             evDiv.className = 'calendar-event';
@@ -176,7 +193,6 @@ function createEventCard(event, viewMode) {
     const card = document.createElement('article');
     card.className = 'event-card';
     const dateString = event.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
     card.innerHTML = `
         ${event.isFree ? '<div class="free-tag">FREE</div>' : ''}
         ${event.imgUrl ? `<div class="event-image-container"><img src="${event.imgUrl}" alt="${event.imgAlt}" class="event-image" loading="lazy"></div>` : ''}
@@ -184,9 +200,7 @@ function createEventCard(event, viewMode) {
             <h2 class="event-title">${event.title}</h2>
             <p class="event-date">${dateString}</p>
             <p class="event-location">${event.location}</p>
-            <div class="event-tags">
-                ${event.tags.map(tag => `<span class="tag-badge">${tag}</span>`).join('')}
-            </div>
+            <div class="event-tags">${event.tags.map(tag => `<span class="tag-badge">${tag}</span>`).join('')}</div>
             <div class="event-details">
                 <div class="event-description">${event.description}</div>
                 <div class="event-actions">
@@ -199,7 +213,6 @@ function createEventCard(event, viewMode) {
         </div>
         <div class="expand-hint">Click to expand</div>
     `;
-
     card.addEventListener('click', () => { if (viewMode !== 'list') card.classList.toggle('expanded'); });
     return card;
 }
@@ -216,6 +229,7 @@ function updateUI() {
         const dateEnd = document.getElementById('date-end').value;
         const timeFilter = document.getElementById('time-filter').value;
         const priceFilter = document.getElementById('price-filter').value;
+        const deptFilter = document.getElementById('dept-select').value;
 
         // Save preferences
         setCookie('pref-search', searchTerm);
@@ -224,26 +238,23 @@ function updateUI() {
         setCookie('pref-view', viewValue);
         setCookie('pref-time', timeFilter);
         setCookie('pref-price', priceFilter);
+        setCookie('pref-dept', deptFilter);
         setCookie('pref-categories', Array.from(selectedCategories).join(','));
 
         let filtered = allEvents.filter(event => {
-            const matchesSearch = event.title.toLowerCase().includes(searchTerm) || 
-                                  event.location.toLowerCase().includes(searchTerm) ||
-                                  event.tags.some(tag => tag.toLowerCase().includes(searchTerm));
+            const matchesSearch = event.title.toLowerCase().includes(searchTerm) || event.location.toLowerCase().includes(searchTerm) || event.tags.some(tag => tag.toLowerCase().includes(searchTerm));
             const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(event.type);
             const matchesPrice = priceFilter === 'any' || (priceFilter === 'free' && event.isFree) || (priceFilter === 'paid' && !event.isFree);
+            const matchesDept = deptFilter === 'all' || event.depts.includes(deptFilter);
             
             const hours = event.date.getHours();
-            const matchesTime = timeFilter === 'any' || 
-                                (timeFilter === 'morning' && hours < 12) ||
-                                (timeFilter === 'afternoon' && hours >= 12 && hours < 17) ||
-                                (timeFilter === 'evening' && hours >= 17);
+            const matchesTime = timeFilter === 'any' || (timeFilter === 'morning' && hours < 12) || (timeFilter === 'afternoon' && hours >= 12 && hours < 17) || (timeFilter === 'evening' && hours >= 17);
 
             const eventTime = event.date.getTime();
             const matchesDateStart = !dateStart || eventTime >= new Date(dateStart).getTime();
             const matchesDateEnd = !dateEnd || eventTime <= (new Date(dateEnd).getTime() + 86400000);
 
-            return matchesSearch && matchesCategory && matchesPrice && matchesTime && matchesDateStart && matchesDateEnd;
+            return matchesSearch && matchesCategory && matchesPrice && matchesTime && matchesDateStart && matchesDateEnd && matchesDept;
         });
 
         filtered.sort((a, b) => {
@@ -264,6 +275,7 @@ function resetFilters() {
     document.getElementById('date-end').value = '';
     document.getElementById('time-filter').value = 'any';
     document.getElementById('price-filter').value = 'any';
+    document.getElementById('dept-select').value = 'all';
     document.getElementById('sort-select').value = 'date-asc';
     document.getElementById('group-select').value = 'none';
     selectedCategories.clear();
@@ -271,27 +283,39 @@ function resetFilters() {
     updateUI();
 }
 
-async function fetchEvents() {
+async function fetchEvents(append = false) {
+    if (!append) {
+        currentOffset = 0;
+        allEvents = [];
+        const app = document.getElementById('app');
+        if (app) app.innerHTML = '<div class="loading-indicator">Loading events...</div>';
+    }
+
     const today = new Date().toISOString().split('T')[0];
     const baseUrl = 'https://calendar.byu.edu/api/Events.json';
     const params = new URLSearchParams({ 
-        'categories': 'all+90', // 'all' usually works, but adding 90 explicitly ensures featured events
+        'categories': 'all+90',
         'event[min][date]': today,
-        'limit': '2000' // Increased from default 100 to get "all the stuff"
+        'limit': BATCH_SIZE.toString(),
+        'offset': currentOffset.toString()
     });
     
     try {
         const response = await fetch(`${baseUrl}?${params.toString()}`);
         const data = await response.json();
-        allEvents = normalizeData(data);
-        populateCategories();
+        const newEvents = normalizeData(data);
         
-        // Restore from cookies after data is loaded
+        // Remove duplicates if any (by id)
+        const existingIds = new Set(allEvents.map(e => e.id));
+        newEvents.forEach(e => {
+            if (!existingIds.has(e.id)) allEvents.push(e);
+        });
+
+        currentOffset += BATCH_SIZE;
+        populateFilters();
+        
         const savedCats = getCookie('pref-categories');
-        if (savedCats) {
-            selectedCategories = new Set(savedCats.split(',').filter(c => c));
-            populateCategories(); // Re-render chips with active state
-        }
+        if (savedCats) selectedCategories = new Set(savedCats.split(',').filter(c => c));
         
         updateUI();
     } catch (error) {
@@ -301,25 +325,24 @@ async function fetchEvents() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Basic preferences restoration
     if (getCookie('pref-search')) document.getElementById('search-input').value = getCookie('pref-search');
     if (getCookie('pref-sort')) document.getElementById('sort-select').value = getCookie('pref-sort');
     if (getCookie('pref-group')) document.getElementById('group-select').value = getCookie('pref-group');
     if (getCookie('pref-view')) document.getElementById('view-select').value = getCookie('pref-view');
     if (getCookie('pref-time')) document.getElementById('time-filter').value = getCookie('pref-time');
     if (getCookie('pref-price')) document.getElementById('price-filter').value = getCookie('pref-price');
+    if (getCookie('pref-dept')) document.getElementById('dept-select').value = getCookie('pref-dept');
 
     fetchEvents();
 
-    const ids = ['search-input', 'sort-select', 'group-select', 'view-select', 'date-start', 'date-end', 'time-filter', 'price-filter'];
+    const ids = ['search-input', 'sort-select', 'group-select', 'view-select', 'date-start', 'date-end', 'time-filter', 'price-filter', 'dept-select'];
     ids.forEach(id => {
         const el = document.getElementById(id);
-        el.addEventListener(el.tagName === 'SELECT' || el.type === 'date' ? 'change' : 'input', updateUI);
+        if (el) el.addEventListener(el.tagName === 'SELECT' || el.type === 'date' ? 'change' : 'input', updateUI);
     });
 
     document.getElementById('toggle-filters').onclick = () => {
         document.getElementById('advanced-filters').classList.toggle('hidden');
     };
-
     document.getElementById('reset-filters').onclick = resetFilters;
 });
