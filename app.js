@@ -23,6 +23,10 @@ function normalizeData(rawData) {
     return rawData.map(event => {
         const startDate = event.StartDateTime ? new Date(event.StartDateTime.replace(' ', 'T')) : null;
         const endDate = event.EndDateTime ? new Date(event.EndDateTime.replace(' ', 'T')) : null;
+        
+        // Extract tags as an array
+        const tags = event.TagsNames ? event.TagsNames.split(',').map(t => t.trim()).filter(t => t) : [];
+
         return {
             title: event.Title || 'Untitled Event',
             date: startDate,
@@ -34,7 +38,8 @@ function normalizeData(rawData) {
             url: event.FullUrl || '#',
             type: event.CategoryName || 'Other',
             imgUrl: event.ImgUrl || null,
-            imgAlt: event.ImgAlt || ''
+            imgAlt: event.ImgAlt || '',
+            tags: tags
         };
     }).filter(event => event.date !== null);
 }
@@ -179,6 +184,9 @@ function createEventCard(event, viewMode) {
             <h2 class="event-title">${event.title}</h2>
             <p class="event-date">${dateString}</p>
             <p class="event-location">${event.location}</p>
+            <div class="event-tags">
+                ${event.tags.map(tag => `<span class="tag-badge">${tag}</span>`).join('')}
+            </div>
             <div class="event-details">
                 <div class="event-description">${event.description}</div>
                 <div class="event-actions">
@@ -219,7 +227,9 @@ function updateUI() {
         setCookie('pref-categories', Array.from(selectedCategories).join(','));
 
         let filtered = allEvents.filter(event => {
-            const matchesSearch = event.title.toLowerCase().includes(searchTerm) || event.location.toLowerCase().includes(searchTerm);
+            const matchesSearch = event.title.toLowerCase().includes(searchTerm) || 
+                                  event.location.toLowerCase().includes(searchTerm) ||
+                                  event.tags.some(tag => tag.toLowerCase().includes(searchTerm));
             const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(event.type);
             const matchesPrice = priceFilter === 'any' || (priceFilter === 'free' && event.isFree) || (priceFilter === 'paid' && !event.isFree);
             
