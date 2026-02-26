@@ -151,7 +151,7 @@ function renderCalendarView(events, container) {
             evDiv.style.whiteSpace = 'pre-wrap'; // Allow newlines
             
             const timeStr = e.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
-            evDiv.textContent = `~${e.title}~\n${timeStr} ~${e.location}~`;
+            evDiv.textContent = `${e.title}\n${timeStr} ${e.location}`;
             
             evDiv.onclick = () => window.open(e.url, '_blank');
             dayDiv.appendChild(evDiv);
