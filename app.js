@@ -3,6 +3,7 @@ let selectedCategories = new Set();
 let selectedDepts = new Set();
 let currentOffset = 0;
 const BATCH_SIZE = 500;
+let isFetching = false;
 
 // Cookie Helpers
 function setCookie(name, value, days = 30) {
@@ -22,24 +23,26 @@ function getCookie(name) {
 }
 
 function normalizeData(rawData) {
-    if (!Array.isArray(rawData)) return [];
-    return rawData.map(event => {
+    // Some API responses are wrapped in a 'value' property
+    const events = Array.isArray(rawData) ? rawData : (rawData.value || []);
+    
+    return events.map(event => {
         const startDate = event.StartDateTime ? new Date(event.StartDateTime.replace(' ', 'T')) : null;
         const endDate = event.EndDateTime ? new Date(event.EndDateTime.replace(' ', 'T')) : null;
         const tags = event.TagsNames ? event.TagsNames.split(',').map(t => t.trim()).filter(t => t) : [];
         const depts = event.DeptNames ? event.DeptNames.split(',').map(d => d.trim()).filter(d => d) : [];
 
         return {
-            id: event.OccurrenceId || event.EventId,
+            id: event.OccurrenceId || event.EventId || Math.random().toString(36).substr(2, 9),
             title: event.Title || 'Untitled Event',
             date: startDate,
             endDate: endDate,
             location: event.LocationName || event.field_event_location || 'TBD',
             description: (event.Description || event.ShortDescription || 'No description available.').replace(/<[^>]*>?/gm, ''),
-            isFree: event.IsFree === "true" || event.IsFree === true || event.LowPrice === "0.0",
+            isFree: event.IsFree === "true" || event.IsFree === true || event.LowPrice === "0.0" || !event.LowPrice,
             price: event.PriceDescription || (event.LowPrice === "0.0" ? "Free" : event.LowPrice) || 'Free',
             url: event.FullUrl || '#',
-            type: event.CategoryName || 'Other',
+            type: event.CategoryName || (event.DeptNames === "Academic Calendar" ? "Academic" : "Other"),
             imgUrl: event.ImgUrl || null,
             imgAlt: event.ImgAlt || '',
             tags: tags,
@@ -113,15 +116,6 @@ function renderEvents(eventsArray) {
             appContainer.appendChild(header);
             groupItems.forEach(event => appContainer.appendChild(createEventCard(event, viewMode)));
         }
-    }
-    
-    // Add "Load More" button if needed
-    if (viewMode !== 'calendar' && viewMode !== 'table') {
-        const loadMoreBtn = document.createElement('button');
-        loadMoreBtn.className = 'icon-btn load-more-btn';
-        loadMoreBtn.textContent = 'Load More Events';
-        loadMoreBtn.onclick = () => fetchEvents(true);
-        appContainer.appendChild(loadMoreBtn);
     }
 }
 
@@ -279,48 +273,59 @@ function resetFilters() {
     document.getElementById('sort-select').value = 'date-asc';
     document.getElementById('group-select').value = 'none';
     selectedCategories.clear();
-    document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
     updateUI();
 }
 
-async function fetchEvents(append = false) {
-    if (!append) {
-        currentOffset = 0;
-        allEvents = [];
-        const app = document.getElementById('app');
-        if (app) app.innerHTML = '<div class="loading-indicator">Loading events...</div>';
-    }
+async function fetchEvents() {
+    if (isFetching) return;
+    isFetching = true;
+    
+    allEvents = [];
+    currentOffset = 0;
+    const app = document.getElementById('app');
+    if (app) app.innerHTML = '<div class="loading-indicator">Loading all events...</div>';
 
     const today = new Date().toISOString().split('T')[0];
-    const baseUrl = 'https://calendar.byu.edu/api/Events.json';
-    const params = new URLSearchParams({ 
-        'categories': 'all+90',
-        'event[min][date]': today,
-        'limit': BATCH_SIZE.toString(),
-        'offset': currentOffset.toString()
-    });
-    
+    const baseUrls = [
+        'https://calendar.byu.edu/api/Events.json',
+        'https://academiccalendar.byu.edu/api/Events.json'
+    ];
+
     try {
-        const response = await fetch(`${baseUrl}?${params.toString()}`);
-        const data = await response.json();
-        const newEvents = normalizeData(data);
-        
-        // Remove duplicates if any (by id)
-        const existingIds = new Set(allEvents.map(e => e.id));
-        newEvents.forEach(e => {
-            if (!existingIds.has(e.id)) allEvents.push(e);
+        // Fetch from multiple sources in parallel
+        const fetchPromises = baseUrls.map(async (baseUrl) => {
+            const params = new URLSearchParams({ 
+                'categories': 'all',
+                'event[min][date]': today,
+                'limit': '1000'
+            });
+            const response = await fetch(`${baseUrl}?${params.toString()}`);
+            if (!response.ok) return [];
+            const data = await response.json();
+            return normalizeData(data);
         });
 
-        currentOffset += BATCH_SIZE;
-        populateFilters();
+        const results = await Promise.all(fetchPromises);
         
+        // Merge and remove duplicates
+        const idSet = new Set();
+        results.flat().forEach(e => {
+            if (!idSet.has(e.id)) {
+                allEvents.push(e);
+                idSet.add(e.id);
+            }
+        });
+
+        populateFilters();
         const savedCats = getCookie('pref-categories');
         if (savedCats) selectedCategories = new Set(savedCats.split(',').filter(c => c));
         
         updateUI();
     } catch (error) {
-        console.error(error);
-        document.getElementById('app').innerHTML = `<p class="error-message">Failed to load events.</p>`;
+        console.error('Fetch error:', error);
+        if (app) app.innerHTML = `<p class="error-message">Failed to load events. Please check your connection.</p>`;
+    } finally {
+        isFetching = false;
     }
 }
 
