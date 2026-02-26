@@ -16,6 +16,7 @@
         <div class="controls">
             <div class="search-bar">
                 <input type="text" id="search-input" placeholder="Search events..." aria-label="Search events by title, description, or location">
+                <button id="toggle-filters" class="icon-btn" title="Toggle Advanced Filters">⚙️ Filters</button>
                 <select id="view-select" aria-label="Toggle View Mode">
                     <option value="grid">Grid View</option>
                     <option value="list">List View</option>
@@ -24,39 +25,63 @@
                 </select>
             </div>
             
-            <div class="filter-panel">
-                <div class="filter-group">
-                    <label for="date-start">From:</label>
-                    <input type="date" id="date-start" aria-label="Start date">
-                    <label for="date-end">To:</label>
-                    <input type="date" id="date-end" aria-label="End date">
-                </div>
-                
-                <div class="filter-group">
-                    <label for="sort-select">Sort:</label>
-                    <select id="sort-select" aria-label="Sort events by">
-                        <option value="date-asc">Date (Earliest)</option>
-                        <option value="date-desc">Date (Latest)</option>
-                        <option value="location-asc">Location (A-Z)</option>
-                    </select>
-                </div>
-
-                <div class="filter-group">
-                    <label for="group-select">Group By:</label>
-                    <select id="group-select" aria-label="Group events by">
-                        <option value="none">None</option>
-                        <option value="type">Type</option>
-                        <option value="date">Date</option>
-                    </select>
+            <div id="advanced-filters" class="filter-panel hidden">
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Date Range:</label>
+                        <input type="date" id="date-start" aria-label="Start date">
+                        <span>to</span>
+                        <input type="date" id="date-end" aria-label="End date">
+                    </div>
+                    
+                    <div class="filter-group">
+                        <label>Time:</label>
+                        <select id="time-filter">
+                            <option value="any">Any Time</option>
+                            <option value="morning">Morning (Before 12 PM)</option>
+                            <option value="afternoon">Afternoon (12 PM - 5 PM)</option>
+                            <option value="evening">Evening (After 5 PM)</option>
+                        </select>
+                    </div>
                 </div>
 
-                <div class="filter-group">
-                    <label><input type="checkbox" id="free-filter"> <span>Free Only</span></label>
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label>Sort:</label>
+                        <select id="sort-select">
+                            <option value="date-asc">Date (Earliest)</option>
+                            <option value="date-desc">Date (Latest)</option>
+                            <option value="location-asc">Location (A-Z)</option>
+                            <option value="title-asc">Title (A-Z)</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Group:</label>
+                        <select id="group-select">
+                            <option value="none">None</option>
+                            <option value="type">Type</option>
+                            <option value="date">Date</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Price:</label>
+                        <select id="price-filter">
+                            <option value="any">Any Price</option>
+                            <option value="free">Free Only</option>
+                            <option value="paid">Paid Only</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            <div id="category-filters" class="category-chips" aria-label="Filter by categories">
-                <!-- Categories will be dynamically populated here -->
+            <div class="status-bar">
+                <div id="category-filters" class="category-chips"></div>
+                <div class="status-info">
+                    <span id="event-count">Finding events...</span>
+                    <button id="reset-filters" class="text-btn">Reset All</button>
+                </div>
             </div>
         </div>
     </header>

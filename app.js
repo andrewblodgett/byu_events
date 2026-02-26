@@ -28,7 +28,7 @@ function normalizeData(rawData) {
             date: startDate,
             endDate: endDate,
             location: event.LocationName || event.field_event_location || 'TBD',
-            description: event.Description || event.ShortDescription || 'No description available.',
+            description: (event.Description || event.ShortDescription || 'No description available.').replace(/<[^>]*>?/gm, ''), // Clean HTML
             isFree: event.IsFree === "true" || event.IsFree === true || event.LowPrice === "0.0",
             price: event.PriceDescription || (event.LowPrice === "0.0" ? "Free" : event.LowPrice) || 'Free',
             url: event.FullUrl || '#',
@@ -67,6 +67,8 @@ function renderEvents(eventsArray) {
     appContainer.innerHTML = '';
     appContainer.className = `view-${viewMode}`;
 
+    document.getElementById('event-count').textContent = `Showing ${eventsArray.length} event${eventsArray.length === 1 ? '' : 's'}`;
+
     if (eventsArray.length === 0) {
         appContainer.innerHTML = '<p class="empty-state">No events match your criteria.</p>';
         return;
@@ -76,7 +78,7 @@ function renderEvents(eventsArray) {
         renderTableView(eventsArray, appContainer);
     } else if (viewMode === 'calendar') {
         renderCalendarView(eventsArray, appContainer);
-    } else if (groupMode === 'none' || viewMode === 'list') {
+    } else if (groupMode === 'none') {
         eventsArray.forEach(event => appContainer.appendChild(createEventCard(event, viewMode)));
     } else {
         const groups = groupEvents(eventsArray, groupMode);
@@ -96,11 +98,10 @@ function renderTableView(events, container) {
     table.innerHTML = `
         <thead>
             <tr>
-                <th>Date</th>
+                <th>Date/Time</th>
                 <th>Event</th>
                 <th>Location</th>
                 <th>Price</th>
-                <th>Category</th>
             </tr>
         </thead>
         <tbody>
@@ -109,8 +110,7 @@ function renderTableView(events, container) {
                     <td>${event.date.toLocaleDateString()} ${event.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
                     <td><strong>${event.title}</strong></td>
                     <td>${event.location}</td>
-                    <td>${event.isFree ? 'Free' : event.price}</td>
-                    <td>${event.type}</td>
+                    <td>${event.isFree ? 'Free' : 'Paid'}</td>
                 </tr>
             `).join('')}
         </tbody>
@@ -121,25 +121,20 @@ function renderTableView(events, container) {
 function renderCalendarView(events, container) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
     const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     
-    // Header Row: Day Names and Dates
     for (let i = 0; i < 7; i++) {
         const currentDay = new Date(today);
         currentDay.setDate(today.getDate() + i);
-        
         const header = document.createElement('div');
         header.className = 'calendar-weekday';
-        header.innerHTML = `<div>${weekdays[currentDay.getDay()]}</div><div style="font-size: 0.7rem; font-weight: normal;">${currentDay.getMonth() + 1}/${currentDay.getDate()}</div>`;
+        header.innerHTML = `<div>${weekdays[currentDay.getDay()]}</div><div style="font-size: 0.7rem; opacity: 0.7">${currentDay.getMonth() + 1}/${currentDay.getDate()}</div>`;
         container.appendChild(header);
     }
 
-    // Event Row
     for (let i = 0; i < 7; i++) {
         const currentDay = new Date(today);
         currentDay.setDate(today.getDate() + i);
-        
         const dayDiv = document.createElement('div');
         dayDiv.className = 'calendar-day';
         
@@ -152,15 +147,11 @@ function renderCalendarView(events, container) {
         dayEvents.forEach(e => {
             const evDiv = document.createElement('div');
             evDiv.className = 'calendar-event';
-            evDiv.style.whiteSpace = 'pre-wrap'; // Allow newlines
-            
             const timeStr = e.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
             evDiv.textContent = `${e.title}\n${timeStr} ${e.location}`;
-            
             evDiv.onclick = () => window.open(e.url, '_blank');
             dayDiv.appendChild(evDiv);
         });
-        
         container.appendChild(dayDiv);
     }
 }
@@ -176,59 +167,24 @@ function groupEvents(events, criteria) {
     }, {});
 }
 
-function formatCalendarDate(date) {
-    if (!date) return '';
-    return date.toISOString().replace(/-|:|\.\d+/g, '');
-}
-
-function getGoogleCalendarLink(event) {
-    const base = 'https://www.google.com/calendar/render?action=TEMPLATE';
-    const start = formatCalendarDate(event.date);
-    const end = formatCalendarDate(event.endDate || new Date(event.date.getTime() + 3600000));
-    return `${base}&text=${encodeURIComponent(event.title)}&dates=${start}/${end}&details=${encodeURIComponent(event.description)}&location=${encodeURIComponent(event.location)}`;
-}
-
-function getICalLink(event) {
-    const start = formatCalendarDate(event.date);
-    const end = formatCalendarDate(event.endDate || new Date(event.date.getTime() + 3600000));
-    const icalData = [
-        'BEGIN:VCALENDAR',
-        'VERSION:2.0',
-        'BEGIN:VEVENT',
-        `DTSTART:${start}`,
-        `DTEND:${end}`,
-        `SUMMARY:${event.title}`,
-        `DESCRIPTION:${event.description.replace(/\n/g, '\\n')}`,
-        `LOCATION:${event.location}`,
-        'END:VEVENT',
-        'END:VCALENDAR'
-    ].join('\n');
-    return `data:text/calendar;charset=utf8,${encodeURIComponent(icalData)}`;
-}
-
 function createEventCard(event, viewMode) {
     const card = document.createElement('article');
     card.className = 'event-card';
-    
-    const dateString = event.date.toLocaleDateString(undefined, { 
-        weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
+    const dateString = event.date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
     card.innerHTML = `
         ${event.isFree ? '<div class="free-tag">FREE</div>' : ''}
-        ${event.imgUrl ? `<div class="event-image-container"><img src="${event.imgUrl}" alt="${event.imgAlt}" class="event-image"></div>` : ''}
+        ${event.imgUrl ? `<div class="event-image-container"><img src="${event.imgUrl}" alt="${event.imgAlt}" class="event-image" loading="lazy"></div>` : ''}
         <div class="card-content">
             <h2 class="event-title">${event.title}</h2>
             <p class="event-date">${dateString}</p>
             <p class="event-location">${event.location}</p>
             <div class="event-details">
                 <div class="event-description">${event.description}</div>
-                <p class="event-price">${event.isFree ? 'Free' : event.price}</p>
                 <div class="event-actions">
-                    <a href="${event.url}" target="_blank" class="event-link" onclick="event.stopPropagation()">View Details</a>
+                    <a href="${event.url}" target="_blank" class="event-link" onclick="event.stopPropagation()">Details</a>
                     <div class="calendar-links" onclick="event.stopPropagation()">
-                        <a href="${getGoogleCalendarLink(event)}" target="_blank" title="Add to Google Calendar">GCal</a>
-                        <a href="${getICalLink(event)}" download="${event.title}.ics" title="Download iCal">iCal</a>
+                        <a href="https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(event.title)}&dates=${event.date.toISOString().replace(/-|:|\.\d+/g, '')}/${(event.endDate || new Date(event.date.getTime() + 3600000)).toISOString().replace(/-|:|\.\d+/g, '')}&details=${encodeURIComponent(event.description)}&location=${encodeURIComponent(event.location)}" target="_blank">GCal</a>
                     </div>
                 </div>
             </div>
@@ -236,10 +192,7 @@ function createEventCard(event, viewMode) {
         <div class="expand-hint">Click to expand</div>
     `;
 
-    card.addEventListener('click', () => {
-        if (viewMode !== 'list') card.classList.toggle('expanded');
-    });
-
+    card.addEventListener('click', () => { if (viewMode !== 'list') card.classList.toggle('expanded'); });
     return card;
 }
 
@@ -248,88 +201,111 @@ function updateUI() {
     clearTimeout(updateTimeout);
     updateTimeout = setTimeout(() => {
         const searchTerm = document.getElementById('search-input').value.toLowerCase();
-        const freeOnly = document.getElementById('free-filter').checked;
         const sortValue = document.getElementById('sort-select').value;
         const groupValue = document.getElementById('group-select').value;
         const viewValue = document.getElementById('view-select').value;
         const dateStart = document.getElementById('date-start').value;
         const dateEnd = document.getElementById('date-end').value;
+        const timeFilter = document.getElementById('time-filter').value;
+        const priceFilter = document.getElementById('price-filter').value;
 
         // Save preferences
         setCookie('pref-search', searchTerm);
-        setCookie('pref-free', freeOnly);
         setCookie('pref-sort', sortValue);
         setCookie('pref-group', groupValue);
         setCookie('pref-view', viewValue);
+        setCookie('pref-time', timeFilter);
+        setCookie('pref-price', priceFilter);
         setCookie('pref-categories', Array.from(selectedCategories).join(','));
 
         let filtered = allEvents.filter(event => {
-            const matchesSearch = event.title.toLowerCase().includes(searchTerm) || 
-                                  event.description.toLowerCase().includes(searchTerm) ||
-                                  event.location.toLowerCase().includes(searchTerm);
-            const matchesFree = !freeOnly || event.isFree;
+            const matchesSearch = event.title.toLowerCase().includes(searchTerm) || event.location.toLowerCase().includes(searchTerm);
             const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(event.type);
+            const matchesPrice = priceFilter === 'any' || (priceFilter === 'free' && event.isFree) || (priceFilter === 'paid' && !event.isFree);
             
+            const hours = event.date.getHours();
+            const matchesTime = timeFilter === 'any' || 
+                                (timeFilter === 'morning' && hours < 12) ||
+                                (timeFilter === 'afternoon' && hours >= 12 && hours < 17) ||
+                                (timeFilter === 'evening' && hours >= 17);
+
             const eventTime = event.date.getTime();
             const matchesDateStart = !dateStart || eventTime >= new Date(dateStart).getTime();
             const matchesDateEnd = !dateEnd || eventTime <= (new Date(dateEnd).getTime() + 86400000);
 
-            return matchesSearch && matchesFree && matchesCategory && matchesDateStart && matchesDateEnd;
+            return matchesSearch && matchesCategory && matchesPrice && matchesTime && matchesDateStart && matchesDateEnd;
         });
 
         filtered.sort((a, b) => {
             if (sortValue === 'date-asc') return a.date - b.date;
             if (sortValue === 'date-desc') return b.date - a.date;
             if (sortValue === 'location-asc') return a.location.localeCompare(b.location);
+            if (sortValue === 'title-asc') return a.title.localeCompare(b.title);
             return 0;
         });
 
         renderEvents(filtered);
-    }, 200); // Debounce
+    }, 150);
 }
 
-function loadPreferences() {
-    if (getCookie('pref-search')) document.getElementById('search-input').value = getCookie('pref-search');
-    if (getCookie('pref-free')) document.getElementById('free-filter').checked = getCookie('pref-free') === 'true';
-    if (getCookie('pref-sort')) document.getElementById('sort-select').value = getCookie('pref-sort');
-    if (getCookie('pref-group')) document.getElementById('group-select').value = getCookie('pref-group');
-    if (getCookie('pref-view')) document.getElementById('view-select').value = getCookie('pref-view');
-    const savedCats = getCookie('pref-categories');
-    if (savedCats) selectedCategories = new Set(savedCats.split(',').filter(c => c));
+function resetFilters() {
+    document.getElementById('search-input').value = '';
+    document.getElementById('date-start').value = '';
+    document.getElementById('date-end').value = '';
+    document.getElementById('time-filter').value = 'any';
+    document.getElementById('price-filter').value = 'any';
+    document.getElementById('sort-select').value = 'date-asc';
+    document.getElementById('group-select').value = 'none';
+    selectedCategories.clear();
+    document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+    updateUI();
 }
 
 async function fetchEvents() {
     const today = new Date().toISOString().split('T')[0];
     const baseUrl = 'https://calendar.byu.edu/api/Events.json';
-    const params = new URLSearchParams({
-        'categories': 'all',
-        'event[min][date]': today
-    });
-    const url = `${baseUrl}?${params.toString()}`;
+    const params = new URLSearchParams({ 'categories': 'all', 'event[min][date]': today });
     
     try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const response = await fetch(`${baseUrl}?${params.toString()}`);
         const data = await response.json();
         allEvents = normalizeData(data);
         populateCategories();
+        
+        // Restore from cookies after data is loaded
+        const savedCats = getCookie('pref-categories');
+        if (savedCats) {
+            selectedCategories = new Set(savedCats.split(',').filter(c => c));
+            populateCategories(); // Re-render chips with active state
+        }
+        
         updateUI();
     } catch (error) {
         console.error(error);
-        const app = document.getElementById('app');
-        if (app) app.innerHTML = `<p class="error-message">Failed to load events.</p>`;
+        document.getElementById('app').innerHTML = `<p class="error-message">Failed to load events.</p>`;
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    loadPreferences();
+    // Basic preferences restoration
+    if (getCookie('pref-search')) document.getElementById('search-input').value = getCookie('pref-search');
+    if (getCookie('pref-sort')) document.getElementById('sort-select').value = getCookie('pref-sort');
+    if (getCookie('pref-group')) document.getElementById('group-select').value = getCookie('pref-group');
+    if (getCookie('pref-view')) document.getElementById('view-select').value = getCookie('pref-view');
+    if (getCookie('pref-time')) document.getElementById('time-filter').value = getCookie('pref-time');
+    if (getCookie('pref-price')) document.getElementById('price-filter').value = getCookie('pref-price');
+
     fetchEvents();
 
-    ['search-input', 'free-filter', 'sort-select', 'group-select', 'view-select', 'date-start', 'date-end'].forEach(id => {
+    const ids = ['search-input', 'sort-select', 'group-select', 'view-select', 'date-start', 'date-end', 'time-filter', 'price-filter'];
+    ids.forEach(id => {
         const el = document.getElementById(id);
-        if (el) {
-            const eventType = (el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'date') ? 'change' : 'input';
-            el.addEventListener(eventType, updateUI);
-        }
+        el.addEventListener(el.tagName === 'SELECT' || el.type === 'date' ? 'change' : 'input', updateUI);
     });
+
+    document.getElementById('toggle-filters').onclick = () => {
+        document.getElementById('advanced-filters').classList.toggle('hidden');
+    };
+
+    document.getElementById('reset-filters').onclick = resetFilters;
 });
