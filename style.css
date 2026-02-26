@@ -205,6 +205,16 @@ header {
     flex-direction: column;
 }
 
+.category-tag {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+    font-weight: bold;
+    opacity: 0.8;
+}
+
 .event-title {
     font-size: 1.1rem;
     margin-bottom: 0.5rem;

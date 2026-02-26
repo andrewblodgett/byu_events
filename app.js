@@ -202,6 +202,7 @@ function createEventCard(event, viewMode) {
         ${event.isFree ? '<div class="free-tag">FREE</div>' : ''}
         ${event.imgUrl ? `<div class="event-image-container"><img src="${event.imgUrl}" alt="${event.imgAlt}" class="event-image" loading="lazy"></div>` : ''}
         <div class="card-content">
+            <div class="category-tag">${event.type}</div>
             <h2 class="event-title">${event.title}</h2>
             <p class="event-date">${dateString}</p>
             <p class="event-location">${event.location}</p>
