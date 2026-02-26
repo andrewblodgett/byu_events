@@ -6,7 +6,7 @@
     <title>BYU Events</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script src="app.js" defer></script>
 </head>
@@ -14,24 +14,50 @@
     <header>
         <h1>BYU Events</h1>
         <div class="controls">
-            <input type="text" id="search-input" placeholder="Search events..." aria-label="Search events by title, description, or location">
-            <label>
-                <input type="checkbox" id="free-filter" aria-label="Filter to show only free events"> <span>Free Only</span>
-            </label>
-            <select id="sort-select" aria-label="Sort events by">
-                <option value="date-asc">Date (Earliest First)</option>
-                <option value="date-desc">Date (Latest First)</option>
-                <option value="location-asc">Location (A-Z)</option>
-            </select>
-            <select id="group-select" aria-label="Group events by">
-                <option value="none">No Grouping</option>
-                <option value="type">Group by Type</option>
-                <option value="date">Group by Date</option>
-            </select>
-            <select id="view-select" aria-label="Toggle View Mode">
-                <option value="grid">Grid View</option>
-                <option value="list">List View</option>
-            </select>
+            <div class="search-bar">
+                <input type="text" id="search-input" placeholder="Search events..." aria-label="Search events by title, description, or location">
+                <select id="view-select" aria-label="Toggle View Mode">
+                    <option value="grid">Grid View</option>
+                    <option value="list">List View</option>
+                    <option value="table">Table View (Compact)</option>
+                    <option value="calendar">Calendar View</option>
+                </select>
+            </div>
+            
+            <div class="filter-panel">
+                <div class="filter-group">
+                    <label for="date-start">From:</label>
+                    <input type="date" id="date-start" aria-label="Start date">
+                    <label for="date-end">To:</label>
+                    <input type="date" id="date-end" aria-label="End date">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="sort-select">Sort:</label>
+                    <select id="sort-select" aria-label="Sort events by">
+                        <option value="date-asc">Date (Earliest)</option>
+                        <option value="date-desc">Date (Latest)</option>
+                        <option value="location-asc">Location (A-Z)</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="group-select">Group By:</label>
+                    <select id="group-select" aria-label="Group events by">
+                        <option value="none">None</option>
+                        <option value="type">Type</option>
+                        <option value="date">Date</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label><input type="checkbox" id="free-filter"> <span>Free Only</span></label>
+                </div>
+            </div>
+
+            <div id="category-filters" class="category-chips" aria-label="Filter by categories">
+                <!-- Categories will be dynamically populated here -->
+            </div>
         </div>
     </header>
     <main id="app">

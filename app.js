@@ -1,13 +1,12 @@
 let allEvents = [];
+let selectedCategories = new Set();
 
 // Cookie Helpers
 function setCookie(name, value, days = 30) {
     try {
         const expires = new Date(Date.now() + days * 864e5).toUTCString();
         document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Strict`;
-    } catch (e) {
-        console.error('Error setting cookie:', e);
-    }
+    } catch (e) { console.error(e); }
 }
 
 function getCookie(name) {
@@ -16,26 +15,16 @@ function getCookie(name) {
             const parts = v.split('=');
             return parts[0] === name ? decodeURIComponent(parts[1]) : r;
         }, '');
-    } catch (e) {
-        console.error('Error getting cookie:', e);
-        return '';
-    }
+    } catch (e) { return ''; }
 }
 
 function normalizeData(rawData) {
-    if (!Array.isArray(rawData)) {
-        console.warn('API did not return an array. Data:', rawData);
-        return [];
-    }
-    
+    if (!Array.isArray(rawData)) return [];
     return rawData.map(event => {
         const date = event.StartDateTime ? new Date(event.StartDateTime.replace(' ', 'T')) : null;
-        // Check if date is valid
-        const isValidDate = date instanceof Date && !isNaN(date);
-
         return {
             title: event.Title || 'Untitled Event',
-            date: isValidDate ? date : null,
+            date: date,
             location: event.LocationName || event.field_event_location || 'TBD',
             description: event.Description || event.ShortDescription || 'No description available.',
             isFree: event.IsFree === "true" || event.IsFree === true || event.LowPrice === "0.0",
@@ -46,29 +35,45 @@ function normalizeData(rawData) {
     }).filter(event => event.date !== null);
 }
 
+function populateCategories() {
+    const categories = [...new Set(allEvents.map(e => e.type))].sort();
+    const container = document.getElementById('category-filters');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    categories.forEach(cat => {
+        const chip = document.createElement('span');
+        chip.className = `category-chip ${selectedCategories.has(cat) ? 'active' : ''}`;
+        chip.textContent = cat;
+        chip.onclick = () => {
+            if (selectedCategories.has(cat)) selectedCategories.delete(cat);
+            else selectedCategories.add(cat);
+            chip.classList.toggle('active');
+            updateUI();
+        };
+        container.appendChild(chip);
+    });
+}
+
 function renderEvents(eventsArray) {
     const appContainer = document.getElementById('app');
-    const viewSelect = document.getElementById('view-select');
-    const groupSelect = document.getElementById('group-select');
-
-    if (!appContainer || !viewSelect || !groupSelect) {
-        console.error('Required DOM elements missing in renderEvents');
-        return;
-    }
-
-    const viewMode = viewSelect.value;
-    const groupMode = groupSelect.value;
+    const viewMode = document.getElementById('view-select').value;
+    const groupMode = document.getElementById('group-select').value;
     
     appContainer.innerHTML = '';
-    appContainer.className = viewMode === 'list' ? 'view-list' : '';
+    appContainer.className = `view-${viewMode}`;
 
     if (eventsArray.length === 0) {
         appContainer.innerHTML = '<p class="empty-state">No events match your criteria.</p>';
         return;
     }
 
-    if (groupMode === 'none') {
-        eventsArray.forEach(event => appContainer.appendChild(createEventCard(event)));
+    if (viewMode === 'table') {
+        renderTableView(eventsArray, appContainer);
+    } else if (viewMode === 'calendar') {
+        renderCalendarView(eventsArray, appContainer);
+    } else if (groupMode === 'none' || viewMode === 'list') {
+        eventsArray.forEach(event => appContainer.appendChild(createEventCard(event, viewMode)));
     } else {
         const groups = groupEvents(eventsArray, groupMode);
         for (const [groupName, groupItems] of Object.entries(groups)) {
@@ -76,8 +81,81 @@ function renderEvents(eventsArray) {
             header.className = 'group-header';
             header.textContent = groupName;
             appContainer.appendChild(header);
-            groupItems.forEach(event => appContainer.appendChild(createEventCard(event)));
+            groupItems.forEach(event => appContainer.appendChild(createEventCard(event, viewMode)));
         }
+    }
+}
+
+function renderTableView(events, container) {
+    const table = document.createElement('table');
+    table.className = 'events-table';
+    table.innerHTML = `
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Event</th>
+                <th>Location</th>
+                <th>Price</th>
+                <th>Category</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${events.map(event => `
+                <tr onclick="window.open('${event.url}', '_blank')">
+                    <td>${event.date.toLocaleDateString()} ${event.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                    <td><strong>${event.title}</strong></td>
+                    <td>${event.location}</td>
+                    <td>${event.isFree ? 'Free' : event.price}</td>
+                    <td>${event.type}</td>
+                </tr>
+            `).join('')}
+        </tbody>
+    `;
+    container.appendChild(table);
+}
+
+function renderCalendarView(events, container) {
+    // Basic month view based on first event or today
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    weekdays.forEach(wd => {
+        const div = document.createElement('div');
+        div.className = 'calendar-weekday';
+        div.textContent = wd;
+        container.appendChild(div);
+    });
+
+    for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('div');
+        empty.className = 'calendar-day';
+        container.appendChild(empty);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'calendar-day';
+        dayDiv.innerHTML = `<div class="calendar-day-header">${day}</div>`;
+        
+        const dayEvents = events.filter(e => 
+            e.date.getDate() === day && e.date.getMonth() === month && e.date.getFullYear() === year
+        );
+        
+        dayEvents.forEach(e => {
+            const evDiv = document.createElement('div');
+            evDiv.className = 'calendar-event';
+            evDiv.textContent = e.title;
+            evDiv.title = `${e.title} @ ${e.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            evDiv.onclick = () => window.open(e.url, '_blank');
+            dayDiv.appendChild(evDiv);
+        });
+        
+        container.appendChild(dayDiv);
     }
 }
 
@@ -86,14 +164,13 @@ function groupEvents(events, criteria) {
         let key = 'Other';
         if (criteria === 'type') key = event.type;
         if (criteria === 'date') key = event.date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-        
         if (!groups[key]) groups[key] = [];
         groups[key].push(event);
         return groups;
     }, {});
 }
 
-function createEventCard(event) {
+function createEventCard(event, viewMode) {
     const card = document.createElement('article');
     card.className = 'event-card';
     
@@ -102,6 +179,7 @@ function createEventCard(event) {
     });
 
     card.innerHTML = `
+        ${event.isFree ? '<div class="free-tag">FREE</div>' : ''}
         <div class="card-content">
             <h2 class="event-title">${event.title}</h2>
             <p class="event-date">${dateString}</p>
@@ -109,42 +187,27 @@ function createEventCard(event) {
             <div class="event-details">
                 <div class="event-description">${event.description}</div>
                 <p class="event-price">${event.isFree ? 'Free' : event.price}</p>
-                <a href="${event.url}" target="_blank" class="event-link">View Details</a>
+                <a href="${event.url}" target="_blank" class="event-link" onclick="event.stopPropagation()">View Details</a>
             </div>
         </div>
         <div class="expand-hint">Click to expand</div>
     `;
 
-    // Prevent link clicks from toggling expansion
-    const link = card.querySelector('.event-link');
-    if (link) {
-        link.addEventListener('click', (e) => e.stopPropagation());
-    }
-
     card.addEventListener('click', () => {
-        card.classList.toggle('expanded');
+        if (viewMode !== 'list') card.classList.toggle('expanded');
     });
 
     return card;
 }
 
 function updateUI() {
-    const searchInput = document.getElementById('search-input');
-    const freeFilter = document.getElementById('free-filter');
-    const sortSelect = document.getElementById('sort-select');
-    const groupSelect = document.getElementById('group-select');
-    const viewSelect = document.getElementById('view-select');
-
-    if (!searchInput || !freeFilter || !sortSelect || !groupSelect || !viewSelect) {
-        console.error('Required DOM elements missing in updateUI');
-        return;
-    }
-
-    const searchTerm = searchInput.value.toLowerCase();
-    const freeOnly = freeFilter.checked;
-    const sortValue = sortSelect.value;
-    const groupValue = groupSelect.value;
-    const viewValue = viewSelect.value;
+    const searchTerm = document.getElementById('search-input').value.toLowerCase();
+    const freeOnly = document.getElementById('free-filter').checked;
+    const sortValue = document.getElementById('sort-select').value;
+    const groupValue = document.getElementById('group-select').value;
+    const viewValue = document.getElementById('view-select').value;
+    const dateStart = document.getElementById('date-start').value;
+    const dateEnd = document.getElementById('date-end').value;
 
     // Save preferences
     setCookie('pref-search', searchTerm);
@@ -152,12 +215,20 @@ function updateUI() {
     setCookie('pref-sort', sortValue);
     setCookie('pref-group', groupValue);
     setCookie('pref-view', viewValue);
+    setCookie('pref-categories', Array.from(selectedCategories).join(','));
 
     let filtered = allEvents.filter(event => {
         const matchesSearch = event.title.toLowerCase().includes(searchTerm) || 
                               event.description.toLowerCase().includes(searchTerm) ||
                               event.location.toLowerCase().includes(searchTerm);
-        return matchesSearch && (!freeOnly || event.isFree);
+        const matchesFree = !freeOnly || event.isFree;
+        const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(event.type);
+        
+        const eventTime = event.date.getTime();
+        const matchesDateStart = !dateStart || eventTime >= new Date(dateStart).getTime();
+        const matchesDateEnd = !dateEnd || eventTime <= (new Date(dateEnd).getTime() + 86400000);
+
+        return matchesSearch && matchesFree && matchesCategory && matchesDateStart && matchesDateEnd;
     });
 
     filtered.sort((a, b) => {
@@ -171,21 +242,13 @@ function updateUI() {
 }
 
 function loadPreferences() {
-    try {
-        const searchInput = document.getElementById('search-input');
-        const freeFilter = document.getElementById('free-filter');
-        const sortSelect = document.getElementById('sort-select');
-        const groupSelect = document.getElementById('group-select');
-        const viewSelect = document.getElementById('view-select');
-
-        if (getCookie('pref-search') && searchInput) searchInput.value = getCookie('pref-search');
-        if (getCookie('pref-free') && freeFilter) freeFilter.checked = getCookie('pref-free') === 'true';
-        if (getCookie('pref-sort') && sortSelect) sortSelect.value = getCookie('pref-sort');
-        if (getCookie('pref-group') && groupSelect) groupSelect.value = getCookie('pref-group');
-        if (getCookie('pref-view') && viewSelect) viewSelect.value = getCookie('pref-view');
-    } catch (e) {
-        console.error('Error loading preferences:', e);
-    }
+    if (getCookie('pref-search')) document.getElementById('search-input').value = getCookie('pref-search');
+    if (getCookie('pref-free')) document.getElementById('free-filter').checked = getCookie('pref-free') === 'true';
+    if (getCookie('pref-sort')) document.getElementById('sort-select').value = getCookie('pref-sort');
+    if (getCookie('pref-group')) document.getElementById('group-select').value = getCookie('pref-group');
+    if (getCookie('pref-view')) document.getElementById('view-select').value = getCookie('pref-view');
+    const savedCats = getCookie('pref-categories');
+    if (savedCats) selectedCategories = new Set(savedCats.split(',').filter(c => c));
 }
 
 async function fetchEvents() {
@@ -198,39 +261,27 @@ async function fetchEvents() {
     const url = `${baseUrl}?${params.toString()}`;
     
     try {
-        console.log('Fetching events from:', url);
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
-        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        console.log('Received data:', data);
-        
         allEvents = normalizeData(data);
-        console.log('Normalized events:', allEvents);
-        
+        populateCategories();
         updateUI();
     } catch (error) {
-        console.error('Fetch error:', error);
-        const appContainer = document.getElementById('app');
-        if (appContainer) {
-            appContainer.innerHTML = `<p class="error-message">Failed to load events: ${error.message}</p>`;
-        }
+        console.error(error);
+        document.getElementById('app').innerHTML = `<p class="error-message">Failed to load events.</p>`;
     }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM Content Loaded');
     loadPreferences();
     fetchEvents();
 
-    const controls = ['search-input', 'free-filter', 'sort-select', 'group-select', 'view-select'];
-    controls.forEach(id => {
+    ['search-input', 'free-filter', 'sort-select', 'group-select', 'view-select', 'date-start', 'date-end'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
-            const eventType = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
+            const eventType = (el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'date') ? 'change' : 'input';
             el.addEventListener(eventType, updateUI);
-        } else {
-            console.warn(`Control element not found: ${id}`);
         }
     });
 });
