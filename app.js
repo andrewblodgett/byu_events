@@ -115,42 +115,44 @@ function renderTableView(events, container) {
 }
 
 function renderCalendarView(events, container) {
-    // Basic month view based on first event or today
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
     const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    weekdays.forEach(wd => {
-        const div = document.createElement('div');
-        div.className = 'calendar-weekday';
-        div.textContent = wd;
-        container.appendChild(div);
-    });
-
-    for (let i = 0; i < firstDay; i++) {
-        const empty = document.createElement('div');
-        empty.className = 'calendar-day';
-        container.appendChild(empty);
+    
+    // Header Row: Day Names and Dates
+    for (let i = 0; i < 7; i++) {
+        const currentDay = new Date(today);
+        currentDay.setDate(today.getDate() + i);
+        
+        const header = document.createElement('div');
+        header.className = 'calendar-weekday';
+        header.innerHTML = `<div>${weekdays[currentDay.getDay()]}</div><div style="font-size: 0.7rem; font-weight: normal;">${currentDay.getMonth() + 1}/${currentDay.getDate()}</div>`;
+        container.appendChild(header);
     }
 
-    for (let day = 1; day <= daysInMonth; day++) {
+    // Event Row
+    for (let i = 0; i < 7; i++) {
+        const currentDay = new Date(today);
+        currentDay.setDate(today.getDate() + i);
+        
         const dayDiv = document.createElement('div');
         dayDiv.className = 'calendar-day';
-        dayDiv.innerHTML = `<div class="calendar-day-header">${day}</div>`;
         
-        const dayEvents = events.filter(e => 
-            e.date.getDate() === day && e.date.getMonth() === month && e.date.getFullYear() === year
-        );
+        const dayEvents = events.filter(e => {
+            const eDate = new Date(e.date);
+            eDate.setHours(0,0,0,0);
+            return eDate.getTime() === currentDay.getTime();
+        });
         
         dayEvents.forEach(e => {
             const evDiv = document.createElement('div');
             evDiv.className = 'calendar-event';
-            evDiv.textContent = e.title;
-            evDiv.title = `${e.title} @ ${e.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            evDiv.style.whiteSpace = 'pre-wrap'; // Allow newlines
+            
+            const timeStr = e.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: false});
+            evDiv.textContent = `~${e.title}~\n${timeStr} ~${e.location}~`;
+            
             evDiv.onclick = () => window.open(e.url, '_blank');
             dayDiv.appendChild(evDiv);
         });

@@ -170,43 +170,40 @@ h1 {
 #app.view-calendar {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 2px;
+    gap: 1px;
     background-color: var(--bg-secondary);
     border: 1px solid var(--text-secondary);
+    max-width: 100%;
 }
 
 .calendar-day {
     background-color: var(--bg-primary);
-    min-height: 120px;
-    padding: 5px;
+    min-height: 200px;
+    padding: 8px;
     border: 1px solid rgba(255,255,255,0.05);
 }
 
-.calendar-day-header {
-    text-align: right;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    margin-bottom: 5px;
-}
-
 .calendar-event {
-    font-size: 0.7rem;
-    padding: 2px 4px;
-    margin-bottom: 2px;
+    font-size: 0.65rem;
+    padding: 6px;
+    margin-bottom: 6px;
     background-color: var(--accent);
-    border-radius: 3px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    color: var(--bg-primary); /* High contrast */
+    border-radius: 4px;
     cursor: pointer;
+    line-height: 1.2;
+    overflow: hidden;
+    word-break: break-word;
 }
 
 .calendar-weekday {
     text-align: center;
-    padding: 10px;
+    padding: 10px 5px;
     background-color: var(--bg-secondary);
     font-weight: bold;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    border: 1px solid rgba(255,255,255,0.05);
 }
 
 .group-header {
