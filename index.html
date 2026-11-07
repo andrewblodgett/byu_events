@@ -1,102 +1,21 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BYU Events</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <script src="app.js" defer></script>
-</head>
-<body>
-    <header>
-        <h1>BYU Events</h1>
-        <div class="controls">
-            <div class="search-bar">
-                <input type="text" id="search-input" placeholder="Search events..." aria-label="Search events by title, description, or location">
-                <button id="toggle-filters" class="icon-btn" title="Toggle Advanced Filters">⚙️ Filters</button>
-                <select id="view-select" aria-label="Toggle View Mode">
-                    <option value="grid">Grid View</option>
-                    <option value="table">Table View (Compact)</option>
-                    <option value="calendar">Calendar View</option>
-                </select>
-            </div>
-            
-            <div id="advanced-filters" class="filter-panel hidden">
-                <div class="filter-row">
-                    <div class="filter-group">
-                        <label>Date Range:</label>
-                        <input type="date" id="date-start" aria-label="Start date">
-                        <span>to</span>
-                        <input type="date" id="date-end" aria-label="End date">
-                    </div>
-                    
-                    <div class="filter-group">
-                        <label>Time:</label>
-                        <select id="time-filter">
-                            <option value="any">Any Time</option>
-                            <option value="morning">Morning (Before 12 PM)</option>
-                            <option value="afternoon">Afternoon (12 PM - 5 PM)</option>
-                            <option value="evening">Evening (After 5 PM)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="filter-row">
-                    <div class="filter-group">
-                        <label>Sort:</label>
-                        <select id="sort-select">
-                            <option value="date-asc">Date (Earliest)</option>
-                            <option value="date-desc">Date (Latest)</option>
-                            <option value="location-asc">Location (A-Z)</option>
-                            <option value="title-asc">Title (A-Z)</option>
-                        </select>
-                    </div>
-
-                    <div class="filter-group">
-                        <label>Group:</label>
-                        <select id="group-select">
-                            <option value="none">None</option>
-                            <option value="type">Type</option>
-                            <option value="date">Date</option>
-                        </select>
-                    </div>
-
-                    <div class="filter-group">
-                        <label>Dept:</label>
-                        <select id="dept-select">
-                            <option value="all">All Departments</option>
-                        </select>
-                    </div>
-
-                    <div class="filter-group">
-                        <label>Price:</label>
-                        <select id="price-filter">
-                            <option value="any">Any Price</option>
-                            <option value="free">Free Only</option>
-                            <option value="paid">Paid Only</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div class="status-bar">
-                <div id="category-filters" class="category-chips"></div>
-                <div class="status-info">
-                    <span id="event-count">Finding events...</span>
-                    <button id="reset-filters" class="text-btn">Reset All</button>
-                </div>
-            </div>
-        </div>
-    </header>
-    <main id="app">
-        <div id="loading" class="loading-indicator">Loading upcoming BYU events...</div>
-        <!-- Events will be rendered here dynamically -->
-    </main>
-    <footer>
-        <p>&copy; 2026 BYU Events Aggregator</p>
-    </footer>
-</body>
+    <meta
+      name="description"
+      content="Every event happening on BYU campus in one place: concerts, games, lectures, club activities, museum programs, and more."
+    />
+    <link rel="canonical" href="https://andrewblodgett.github.io/byu_events/" />
+    <link rel="icon" href="/byu_events/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#002e5d" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>This page needs JavaScript to filter events.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>
