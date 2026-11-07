@@ -31,9 +31,12 @@ so one site going down doesn't empty the page.
 
 | Kind | Where | Adapter |
 | --- | --- | --- |
-| BYU Calendar API | calendar.byu.edu (arts, athletics, devotionals, BYUSA, academic dates), plus department copies like math.byu.edu | `byuCalendarApi.ts` |
+| BYU Calendar API | calendar.byu.edu (arts, devotionals, BYUSA, academic dates) | `byuCalendarApi.ts` |
+| Department copies of that API | math, engineering, music, the Maxwell Institute, Belonging; plus Graduate Studies and Life Sciences, whose copies gather many departments' calendars (Humanities, Nursing, Mechanical Engineering, the Bean Museum, ...) | `byuCalendarApi.ts` |
+| Athletics schedule API | byucougars.com, home games only | `byuAthletics.ts` |
 | Club events feed | clubs.byu.edu/rest/events | `byuClubs.ts` |
-| Department websites | Brightspot sites such as cs.byu.edu, acme.byu.edu, kennedy.byu.edu, moa.byu.edu, sclcenter.byu.edu | `brightspotSite.ts` |
+| Department websites | Brightspot sites such as cs.byu.edu, acme.byu.edu, kennedy.byu.edu, wheatley.byu.edu, socialsciences.byu.edu, moa.byu.edu | `brightspotSite.ts` |
+| Hand-built pages | International Cinema showtimes, Physics colloquia | `internationalCinema.ts`, `physicsColloquia.ts` |
 | Calendar feeds | Public Google or Outlook calendars, such as the Bean Museum's and ECE's | `icsFeed.ts` |
 
 The footer of the live site lists every source with its event count and
@@ -48,6 +51,12 @@ URLs end in a date (like `cs.byu.edu/weekly-seminar-2026-11-13`), a
 If the department publishes a Google or Outlook calendar, use
 `icsFeedSource` with its public `.ics` link.
 
+Before writing a new adapter, check whether the site serves its own copy of
+the calendar API at `/api/Events.json?categories=all`; several department
+sites do, and `byuCalendarApiSource` handles them. When a department's
+events come through another site's copy, add the department to
+`pipeline/knownSites.ts` so its events get the right organizer and category.
+
 Run `npm run fetch-events` to check that the new source finds events.
 
 ### Data quirks worth knowing
@@ -56,7 +65,9 @@ Run `npm run fetch-events` to check that the new source finds events.
   `0.0`. Whether an event needs tickets comes from `TicketsExist`.
 - The calendar API ignores its date range unless both ends are given.
 - Department copies of the API also return every main-calendar event, so
-  they're filtered to events whose page is on that department's site.
+  they're filtered to events whose page is on that department's site
+  (`ownEventsOnly`), or to events not already on the main calendar
+  (`skipMainCalendarEvents`) for copies that gather several departments.
 - All times are handled in Provo's time zone (`src/lib/campusTime.ts`), no
   matter where the build server or the viewer is.
 

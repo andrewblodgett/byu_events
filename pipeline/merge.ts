@@ -4,8 +4,9 @@
  * The same event often appears in several places: a Kennedy Center lecture is
  * on calendar.byu.edu and on kennedy.byu.edu, and Clubs Night is on the main
  * calendar and in the clubs feed. Two events are the same when they share an
- * id (Brightspot content ids match exactly across sources), or when they
- * start within 15 minutes of each other and have closely matching titles.
+ * id (Brightspot content ids match exactly across sources), when they start
+ * within 15 minutes of each other and have closely matching titles, or when
+ * they start at the same minute in the same place with overlapping titles.
  */
 import type { CampusEvent } from '../src/lib/event.ts';
 
@@ -19,7 +20,10 @@ export function titleTokens(title: string): Set<string> {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .split(' ')
-    .filter((word) => word && !STOP_WORDS.has(word));
+    // Single letters are mostly the "s" left over from "Men's".
+    .filter((word) => word.length > 1 && !STOP_WORDS.has(word))
+    // "Forests" and "Forest" are the same word. (Not "class" → "clas".)
+    .map((word) => (word.length > 3 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word));
   return new Set(words);
 }
 
@@ -64,15 +68,23 @@ export function isSameEvent(a: CampusEvent, b: CampusEvent): boolean {
   const startGap = Math.abs(Date.parse(a.start) - Date.parse(b.start));
   if (startGap > SAME_EVENT_START_TOLERANCE_MS) return false;
 
-  // Hiding a real event is worse than showing one twice, so anything short
-  // of a strong title match counts as two different events.
-  if (!titlesMatch(a.title, b.title)) return false;
+  if (titlesMatch(a.title, b.title)) {
+    // A one-word title like "Colloquium" could be two departments' events at
+    // the same hour, so then the place has to agree too. Otherwise trust the
+    // title: sources often disagree on the room.
+    const shortest = Math.min(titleTokens(a.title).size, titleTokens(b.title).size);
+    return shortest >= 2 || locationsCompatible(a, b);
+  }
 
-  // A one-word title like "Colloquium" could be two departments' events at
-  // the same hour, so then the place has to agree too. Otherwise trust the
-  // title: sources often disagree on the room.
-  const shortest = Math.min(titleTokens(a.title).size, titleTokens(b.title).size);
-  return shortest >= 2 || locationsCompatible(a, b);
+  // One venue's two calendars often word the same program differently
+  // ("Biomes at the Bean - Savannas" vs "Biome Program: Savanna"). Accept
+  // that only with strong evidence: the same minute, both sources naming a
+  // matching place, and at least two words in common. Hiding a real event
+  // is worse than showing one twice ("Care Week Workshop" and "Hip Hop
+  // Workshop" share one word and stay separate).
+  const tokensB = titleTokens(b.title);
+  const sharedWords = [...titleTokens(a.title)].filter((word) => tokensB.has(word)).length;
+  return startGap === 0 && sharedWords >= 2 && a.location !== null && b.location !== null && locationsCompatible(a, b);
 }
 
 /** Keep `primary`'s fields, filling gaps from `secondary`. */

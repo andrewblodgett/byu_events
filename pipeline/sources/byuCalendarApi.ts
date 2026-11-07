@@ -7,6 +7,7 @@
  */
 import { campusDateKey, parseCampusWallTime } from '../../src/lib/campusTime.ts';
 import { fetchJson } from '../http.ts';
+import { isMainCalendarUrl, knownSiteFor } from '../knownSites.ts';
 import { cleanInlineText, htmlToText, nonEmpty, truncateDescription } from '../text.ts';
 import {
   brightspotEventId,
@@ -61,16 +62,22 @@ const CATEGORY_BY_BYU_NAME: Record<string, CategoryId> = {
 /** DeptNames entries that describe how an event is listed, not who hosts it. */
 const NON_ORGANIZER_DEPT_NAMES = /^(suggested\b|ticketed events$|streaming$|academic calendar$)/i;
 
+/** Departments repost registrar dates ("Thanksgiving- No Classes") with no category. */
+const ACADEMIC_DATE_TITLE =
+  /no classes|withdraw deadline|add.?drop|last day of .*class|first day of .*class|final exams?|reading day|holiday|^christmas( eve| day)?$|^new year|^thanksgiving/i;
+
 function isAcademicDate(raw: RawCalendarEvent): boolean {
   const deptNames = raw.DeptNames ?? '';
-  // Academic calendar entries come without a CategoryName or with a
-  // registrar-specific one such as "Final Exam Day".
-  return /academic calendar|student financial deadlines/i.test(deptNames) || !raw.CategoryName;
+  if (/academic calendar|student financial deadlines/i.test(deptNames)) return true;
+  if (raw.AllDay === 'true' && ACADEMIC_DATE_TITLE.test(raw.Title)) return true;
+  // Registrar entries also come without a CategoryName. Department events
+  // sometimes do too, so only count it when the page isn't a department's.
+  return !raw.CategoryName && !knownSiteFor(raw.FullUrl);
 }
 
 function categoryFor(raw: RawCalendarEvent, fallback: CategoryId): CategoryId {
   if (isAcademicDate(raw)) return 'academic';
-  return CATEGORY_BY_BYU_NAME[raw.CategoryName ?? ''] ?? fallback;
+  return CATEGORY_BY_BYU_NAME[raw.CategoryName ?? ''] ?? knownSiteFor(raw.FullUrl)?.category ?? fallback;
 }
 
 function organizerFor(raw: RawCalendarEvent): string | null {
@@ -107,7 +114,9 @@ export function normalizeCalendarEvent(
     url: urlOrNull(raw.FullUrl) ?? urlOrNull(raw.MoreInformationUrl),
     imageUrl: urlOrNull(raw.ImgUrl),
     category: categoryFor(raw, options.fallbackCategory),
-    organizer: options.organizer ?? organizerFor(raw),
+    // A department's DeptNames are often internal tags ("Math 191",
+    // "Seminar"), so the site's own name is the better organizer.
+    organizer: options.organizer ?? knownSiteFor(raw.FullUrl)?.name ?? organizerFor(raw),
     ticketed,
     ticketUrl: ticketed ? (urlOrNull(raw.TicketsUrl) ?? urlOrNull(raw.PriceDescription)) : null,
     sources: [options.sourceId],
@@ -128,7 +137,14 @@ export interface CalendarApiOptions {
    * Set this to keep only the events whose page is on this site.
    */
   ownEventsOnly?: boolean;
+  /**
+   * Some copies (Graduate Studies, Life Sciences) gather events from many
+   * department sites. Set this to drop the ones the main calendar already
+   * lists, so the source's event count shows what it adds.
+   */
+  skipMainCalendarEvents?: boolean;
 }
+
 
 function isOnSite(raw: RawCalendarEvent, siteUrl: string): boolean {
   try {
@@ -164,6 +180,7 @@ export function byuCalendarApiSource(options: CalendarApiOptions): EventSource {
       }
       return raws
         .filter((raw) => !options.ownEventsOnly || isOnSite(raw, options.siteUrl))
+        .filter((raw) => !options.skipMainCalendarEvents || !isMainCalendarUrl(raw.FullUrl))
         .map((raw) =>
           normalizeCalendarEvent(raw, {
             sourceId: options.id,
