@@ -29,8 +29,10 @@ so one site going down doesn't empty the page.
 
 The build is gentle with BYU's servers: every request to a *.byu.edu site
 waits its turn in one queue, one at a time and half a second apart, with a
-user agent that links back to this repository. If BYU refuses three requests
-in a row, the build stops asking for the rest of that run (`pipeline/http.ts`).
+user agent that links back to this repository. Some BYU sites refuse
+requests from cloud servers such as GitHub's; once a site refuses, the build
+doesn't ask it again that run and reuses its events from the last run
+(`pipeline/http.ts`).
 
 ### Sources
 

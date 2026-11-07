@@ -87,10 +87,10 @@ async function main(): Promise<void> {
 
   const found = results.reduce((total, result) => total + result.events.length, 0);
   console.log(`\n${events.length} events after merging ${found} from ${SOURCES.length} sources.`);
+  const refusing = [...byuQueue.refusingHosts].sort();
   console.log(
-    `${byuQueue.requestCount} requests to BYU's servers, one at a time, ${byuQueue.gapMs / 1000} s apart; ` +
-      `${byuQueue.refusalCount} refused.` +
-      (byuQueue.stoppedAsking ? " Stopped asking after repeated refusals." : ''),
+    `${byuQueue.requestCount} requests to BYU's servers, one at a time, ${byuQueue.gapMs / 1000} s apart. ` +
+      (refusing.length ? `Refused by (and not asked again): ${refusing.join(', ')}.` : 'None refused.'),
   );
 
   if (results.every((result) => result.report.status === 'failed')) {

@@ -5,7 +5,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe('PoliteQueue', () => {
   it('runs one request at a time with a pause between them', async () => {
-    const queue = new PoliteQueue(40, 3);
+    const queue = new PoliteQueue(40);
     const spans: { start: number; end: number }[] = [];
     const request = async () => {
       const start = Date.now();
@@ -13,7 +13,7 @@ describe('PoliteQueue', () => {
       spans.push({ start, end: Date.now() });
     };
 
-    await Promise.all([queue.run(request), queue.run(request), queue.run(request)]);
+    await Promise.all([queue.run('a.byu.edu', request), queue.run('b.byu.edu', request), queue.run('a.byu.edu', request)]);
 
     expect(queue.requestCount).toBe(3);
     for (let i = 1; i < spans.length; i++) {
@@ -23,34 +23,37 @@ describe('PoliteQueue', () => {
   });
 
   it('keeps going after a request fails', async () => {
-    const queue = new PoliteQueue(0, 3);
-    const failing = queue.run(async () => {
+    const queue = new PoliteQueue(0);
+    const failing = queue.run('a.byu.edu', async () => {
       throw new Error('network');
     });
     await expect(failing).rejects.toThrow('network');
-    await expect(queue.run(async () => 'ok')).resolves.toBe('ok');
+    await expect(queue.run('a.byu.edu', async () => 'ok')).resolves.toBe('ok');
   });
 
-  it('stops asking after refusals in a row, without sending more requests', async () => {
-    const queue = new PoliteQueue(0, 2);
+  it('stops asking a host that refused, without sending the request', async () => {
+    const queue = new PoliteQueue(0);
     const refuse = async () => {
       throw new HttpError(403, 'https://calendar.byu.edu/');
     };
-    await expect(queue.run(refuse)).rejects.toBeInstanceOf(HttpError);
-    await expect(queue.run(refuse)).rejects.toBeInstanceOf(HttpError);
+    await expect(queue.run('calendar.byu.edu', refuse)).rejects.toBeInstanceOf(HttpError);
 
     let sent = false;
-    await expect(queue.run(async () => (sent = true))).rejects.toBeInstanceOf(StoppedAskingError);
+    await expect(queue.run('calendar.byu.edu', async () => (sent = true))).rejects.toBeInstanceOf(StoppedAskingError);
     expect(sent).toBe(false);
-    expect(queue.stoppedAsking).toBe(true);
-    expect(queue.refusalCount).toBe(2);
+    expect(queue.refusingHosts).toEqual(new Set(['calendar.byu.edu']));
+    expect(queue.requestCount).toBe(1);
   });
 
-  it('forgives a refusal once a request succeeds', async () => {
-    const queue = new PoliteQueue(0, 2);
-    await expect(queue.run(async () => Promise.reject(new HttpError(429, 'x')))).rejects.toThrow();
-    await queue.run(async () => 'ok');
-    await expect(queue.run(async () => Promise.reject(new HttpError(403, 'x')))).rejects.toThrow();
-    expect(queue.stoppedAsking).toBe(false);
+  it('keeps asking hosts that have not refused', async () => {
+    const queue = new PoliteQueue(0);
+    await expect(queue.run('calendar.byu.edu', async () => Promise.reject(new HttpError(403, 'x')))).rejects.toThrow();
+    await expect(queue.run('math.byu.edu', async () => 'ok')).resolves.toBe('ok');
+  });
+
+  it('counts 429 Too Many Requests as a refusal too', async () => {
+    const queue = new PoliteQueue(0);
+    await expect(queue.run('music.byu.edu', async () => Promise.reject(new HttpError(429, 'x')))).rejects.toThrow();
+    expect(queue.refusingHosts.has('music.byu.edu')).toBe(true);
   });
 });

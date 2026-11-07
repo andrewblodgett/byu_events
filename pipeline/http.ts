@@ -5,8 +5,9 @@
  * Every request to BYU's servers (any *.byu.edu site) waits its turn in one
  * queue: one request at a time, with a pause between them. Most BYU sites sit
  * behind the same servers, so this keeps the whole build gentle on them, not
- * just each site. If BYU refuses several requests in a row, the build stops
- * asking for the rest of the run and falls back on the last run's events.
+ * just each site. Some BYU sites refuse requests from cloud servers such as
+ * GitHub's; once a site refuses (403 or 429), we stop asking that site for the
+ * rest of the run and fall back on its events from the last run.
  */
 
 const USER_AGENT = 'byu-events-aggregator (+https://github.com/andrewblodgett/byu_events)';
@@ -15,8 +16,6 @@ const RETRY_DELAY_MS = 3_000;
 
 /** Pause between requests to BYU's servers. */
 const BYU_REQUEST_GAP_MS = 500;
-/** Refusals (403 or 429) in a row before we stop asking BYU's servers. */
-const BYU_REFUSALS_BEFORE_STOPPING = 3;
 
 export class HttpError extends Error {
   readonly status: number;
@@ -44,40 +43,32 @@ function isRetryable(error: unknown): boolean {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Runs requests one at a time, waiting `gapMs` after each before starting the next. */
+/**
+ * Runs requests one at a time, waiting `gapMs` after each before starting the
+ * next. Once a host refuses a request, later requests to it aren't sent.
+ */
 export class PoliteQueue {
   readonly gapMs: number;
-  readonly refusalsBeforeStopping: number;
   requestCount = 0;
-  refusalCount = 0;
-  private consecutiveRefusals = 0;
+  /** Hosts that refused us this run. */
+  readonly refusingHosts = new Set<string>();
   private lastFinishedAt = 0;
   private tail: Promise<unknown> = Promise.resolve();
 
-  constructor(gapMs: number, refusalsBeforeStopping: number) {
+  constructor(gapMs: number) {
     this.gapMs = gapMs;
-    this.refusalsBeforeStopping = refusalsBeforeStopping;
   }
 
-  get stoppedAsking(): boolean {
-    return this.consecutiveRefusals >= this.refusalsBeforeStopping;
-  }
-
-  run<T>(request: () => Promise<T>): Promise<T> {
+  run<T>(host: string, request: () => Promise<T>): Promise<T> {
     const turn = this.tail.then(async () => {
-      if (this.stoppedAsking) throw new StoppedAskingError('Stopped asking after repeated refusals');
+      if (this.refusingHosts.has(host)) throw new StoppedAskingError(`${host} refused an earlier request`);
       const wait = this.lastFinishedAt + this.gapMs - Date.now();
       if (wait > 0) await sleep(wait);
       this.requestCount++;
       try {
-        const result = await request();
-        this.consecutiveRefusals = 0;
-        return result;
+        return await request();
       } catch (error) {
-        if (isRefusal(error)) {
-          this.consecutiveRefusals++;
-          this.refusalCount++;
-        }
+        if (isRefusal(error)) this.refusingHosts.add(host);
         throw error;
       } finally {
         this.lastFinishedAt = Date.now();
@@ -89,10 +80,9 @@ export class PoliteQueue {
   }
 }
 
-export const byuQueue = new PoliteQueue(BYU_REQUEST_GAP_MS, BYU_REFUSALS_BEFORE_STOPPING);
+export const byuQueue = new PoliteQueue(BYU_REQUEST_GAP_MS);
 
-function isByuUrl(url: string): boolean {
-  const host = new URL(url).hostname;
+function isByuHost(host: string): boolean {
   return host === 'byu.edu' || host.endsWith('.byu.edu');
 }
 
@@ -106,7 +96,8 @@ async function fetchOnce(url: string): Promise<string> {
 }
 
 export async function fetchText(url: string): Promise<string> {
-  const attempt = () => (isByuUrl(url) ? byuQueue.run(() => fetchOnce(url)) : fetchOnce(url));
+  const host = new URL(url).hostname;
+  const attempt = () => (isByuHost(host) ? byuQueue.run(host, () => fetchOnce(url)) : fetchOnce(url));
   try {
     return await attempt();
   } catch (error) {
