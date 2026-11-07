@@ -27,6 +27,11 @@ GitHub Action (every 3 hours)
 If a source fails during a run, its events from the previous run are reused,
 so one site going down doesn't empty the page.
 
+The build is gentle with BYU's servers: every request to a *.byu.edu site
+waits its turn in one queue, one at a time and half a second apart, with a
+user agent that links back to this repository. If BYU refuses three requests
+in a row, the build stops asking for the rest of that run (`pipeline/http.ts`).
+
 ### Sources
 
 | Kind | Where | Adapter |

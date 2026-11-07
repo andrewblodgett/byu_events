@@ -10,7 +10,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { campusDateKey, campusMidnight } from '../src/lib/campusTime.ts';
 import { toIcsCalendar } from '../src/lib/calendarFiles.ts';
 import { CATEGORIES, type CampusEvent, type EventsFile, type SourceReport } from '../src/lib/event.ts';
-import { fetchJson } from './http.ts';
+import { byuQueue, fetchJson } from './http.ts';
 import { mergeEvents } from './merge.ts';
 import { SOURCES } from './sources.config.ts';
 import type { EventSource, FetchWindow } from './sources/types.ts';
@@ -87,6 +87,11 @@ async function main(): Promise<void> {
 
   const found = results.reduce((total, result) => total + result.events.length, 0);
   console.log(`\n${events.length} events after merging ${found} from ${SOURCES.length} sources.`);
+  console.log(
+    `${byuQueue.requestCount} requests to BYU's servers, one at a time, ${byuQueue.gapMs / 1000} s apart; ` +
+      `${byuQueue.refusalCount} refused.` +
+      (byuQueue.stoppedAsking ? " Stopped asking after repeated refusals." : ''),
+  );
 
   if (results.every((result) => result.report.status === 'failed')) {
     // Don't let a total outage replace the live site with an empty one.
