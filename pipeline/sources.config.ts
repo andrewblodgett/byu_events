@@ -30,6 +30,16 @@ export const SOURCES: EventSource[] = [
     organizer: 'Department of Mathematics',
     ownEventsOnly: true,
   }),
+  // The math department's calendar points here for ACME's own events. (APEX's
+  // calendar just re-lists math.byu.edu events, which the source above covers.)
+  brightspotSiteSource({
+    id: 'acme',
+    name: 'ACME (Applied and Computational Mathematics Emphasis)',
+    homepage: 'https://acme.byu.edu/event',
+    listingUrls: ['https://acme.byu.edu/event'],
+    category: 'student-life',
+    organizer: 'ACME',
+  }),
 
   // Department and office sites whose events we read page by page.
   brightspotSiteSource({

@@ -14,7 +14,7 @@ import { campusDateKey } from '../../src/lib/campusTime.ts';
 import type { CampusEvent } from '../../src/lib/event.ts';
 import { fetchText, mapWithConcurrency } from '../http.ts';
 import { parseIcs } from '../icsParser.ts';
-import { htmlToText, nonEmpty, truncateDescription } from '../text.ts';
+import { cleanInlineText, htmlToText, nonEmpty, truncateDescription } from '../text.ts';
 import { brightspotEventId, createEvent, type CategoryId, type EventSource, type FetchWindow } from './types.ts';
 
 const PAGE_CONCURRENCY = 4;
@@ -44,11 +44,16 @@ export function readEventPage(pageHtml: string): EventPageDetails | null {
   const contentId = ICS_LINK.exec(pageHtml)?.[1];
   if (!contentId) return null;
   const root = parse(pageHtml);
-  const body = root.querySelector('.EventPage-eventBody') ?? root.querySelector('.EventPage-intro');
-  const metaDescription = root.querySelector('meta[name="description"]')?.getAttribute('content') ?? '';
+  // Many events have no body, only a one-line summary in the page's meta
+  // tags. (EventPage-intro is the header block: title, date, and location.)
+  const bodyText = htmlToText(root.querySelector('.EventPage-eventBody')?.innerHTML ?? '');
+  const summary =
+    root.querySelector('meta[property="og:description"]')?.getAttribute('content') ??
+    root.querySelector('meta[name="description"]')?.getAttribute('content') ??
+    '';
   return {
     contentId,
-    description: truncateDescription(htmlToText(body?.innerHTML ?? metaDescription)),
+    description: truncateDescription(bodyText || cleanInlineText(summary)),
     imageUrl: nonEmpty(root.querySelector('meta[property="og:image"]')?.getAttribute('content')),
   };
 }

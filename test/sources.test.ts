@@ -79,6 +79,11 @@ describe('Brightspot department sites', () => {
     expect(page?.imageUrl).toMatch(/^https:\/\/brightspotcdn\.byu\.edu\//);
   });
 
+  it("uses the page's summary when an event has no body, not the header block", () => {
+    const page = readEventPage(fixture('brightspot-event-no-body.html'));
+    expect(page?.description).toBe('Enjoy a few snacks with fellow ACME students!');
+  });
+
   it('returns null for pages that are not events', () => {
     expect(readEventPage('<html><body>Not an event</body></html>')).toBeNull();
   });

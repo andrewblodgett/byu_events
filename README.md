@@ -33,7 +33,7 @@ so one site going down doesn't empty the page.
 | --- | --- | --- |
 | BYU Calendar API | calendar.byu.edu (arts, athletics, devotionals, BYUSA, academic dates), plus department copies like math.byu.edu | `byuCalendarApi.ts` |
 | Club events feed | clubs.byu.edu/rest/events | `byuClubs.ts` |
-| Department websites | Brightspot sites such as cs.byu.edu, kennedy.byu.edu, moa.byu.edu, sclcenter.byu.edu | `brightspotSite.ts` |
+| Department websites | Brightspot sites such as cs.byu.edu, acme.byu.edu, kennedy.byu.edu, moa.byu.edu, sclcenter.byu.edu | `brightspotSite.ts` |
 | Calendar feeds | Public Google or Outlook calendars, such as the Bean Museum's and ECE's | `icsFeed.ts` |
 
 The footer of the live site lists every source with its event count and
